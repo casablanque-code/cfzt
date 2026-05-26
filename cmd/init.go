@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/casablanque-code/zt/config"
+	"github.com/casablanque-code/cfzt/config"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )

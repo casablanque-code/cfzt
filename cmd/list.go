@@ -5,8 +5,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/casablanque-code/zt/internal/cloudflared"
-	"github.com/casablanque-code/zt/internal/state"
+	"github.com/casablanque-code/cfzt/internal/cloudflared"
+	"github.com/casablanque-code/cfzt/internal/state"
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"

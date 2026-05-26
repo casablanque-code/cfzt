@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/casablanque-code/zt/config"
-	"github.com/casablanque-code/zt/internal/cloudflare"
-	"github.com/casablanque-code/zt/internal/cloudflared"
-	"github.com/casablanque-code/zt/internal/state"
+	"github.com/casablanque-code/cfzt/config"
+	"github.com/casablanque-code/cfzt/internal/cloudflare"
+	"github.com/casablanque-code/cfzt/internal/cloudflared"
+	"github.com/casablanque-code/cfzt/internal/state"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )

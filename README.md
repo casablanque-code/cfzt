@@ -52,7 +52,7 @@ go install github.com/casablanque-code/cfzt/cmd@latest
 
 ```bash
 git clone https://github.com/casablanque-code/cfzt
-cd zt
+cd cfzt
 go build -o zt ./cmd
 sudo mv zt /usr/local/bin/
 ```

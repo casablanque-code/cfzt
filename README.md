@@ -3,8 +3,8 @@
 One command to expose a local service through Cloudflare Zero Trust.
 
 ```
-zt up grafana 3000
-# → https://grafana.yourdomain.com  (ZT-protected, running in 15s)
+zt up portainer 9000 --allow you@example.com
+# → https://portainer.yourdomain.com  (ZT-protected, running in ~15s)
 ```
 
 ## What it does
@@ -13,7 +13,7 @@ zt up grafana 3000
 
 1. Creates a Cloudflare Tunnel
 2. Configures ingress rules
-3. Creates a CNAME DNS record
+3. Upserts a CNAME DNS record
 4. Creates a Zero Trust Access application
 5. Starts `cloudflared` in the background
 6. Saves state locally
@@ -42,22 +42,30 @@ zt up grafana 3000
 
 ## Install
 
-### Option A — go install
+### Option A — install script (recommended)
 
 ```bash
-go install github.com/casablanque-code/cfzt/cmd@latest
+curl -fsSL https://raw.githubusercontent.com/casablanque-code/cfzt/main/install.sh | bash
 ```
 
-### Option B — build from source
+Detects OS and architecture, downloads the correct binary from the latest release, places it in `/usr/local/bin/zt`.
+
+### Option B — go install
+
+```bash
+go install github.com/casablanque-code/cfzt/cmd/zt@latest
+```
+
+### Option C — build from source
 
 ```bash
 git clone https://github.com/casablanque-code/cfzt
 cd cfzt
-go build -o zt ./cmd
+go build -o zt ./cmd/zt
 sudo mv zt /usr/local/bin/
 ```
 
-### Option C — download binary
+### Option D — download binary
 
 Download from [Releases](https://github.com/casablanque-code/cfzt/releases) and place in your PATH.
 
@@ -90,14 +98,17 @@ zt up <name> <port>
 ```
 
 ```bash
-# Expose Grafana (Zero Trust protected, bypass policy by default)
+# Zero Trust protected — prompts email login via Cloudflare Access
+zt up portainer 9000 --allow you@example.com
+
+# Multiple allowed emails
+zt up vault 8200 --allow alice@example.com --allow bob@example.com
+
+# Access app with bypass policy (no login required, but still proxied through CF)
 zt up grafana 3000
 
-# Expose an API publicly (no ZT gate)
+# Completely public, no Access app created
 zt up api 8080 --public
-
-# Restrict to specific emails
-zt up vault 8200 --allow alice@example.com --allow bob@example.com
 ```
 
 Service becomes available at `https://<name>.<domain>`.
@@ -105,10 +116,10 @@ Service becomes available at `https://<name>.<domain>`.
 ### Tear down a tunnel
 
 ```bash
-zt down grafana
+zt down portainer
 ```
 
-Stops the process, removes DNS record, deletes the tunnel from Cloudflare.
+Stops the cloudflared process, removes the DNS record, deletes the tunnel and Access app from Cloudflare.
 
 ### List tunnels
 
@@ -117,15 +128,15 @@ zt list      # or: zt ls
 ```
 
 ```
-NAME      URL                           PORT   STATUS    PID
-grafana   https://grafana.example.com   3000   running   84291
-vault     https://vault.example.com     8200   stopped   -
+NAME        URL                             PORT   STATUS    PID
+portainer   https://portainer.example.com   9000   running   17423
+grafana     https://grafana.example.com     3000   stopped   -
 ```
 
 ### Tunnel details
 
 ```bash
-zt status grafana
+zt status portainer
 ```
 
 ---
@@ -136,20 +147,20 @@ zt status grafana
 
 | Flag | Description |
 |---|---|
-| `--public` | Skip Zero Trust gate (public access) |
-| `--allow <email>` | Restrict to email(s), repeatable |
+| `--public` | No Zero Trust gate — skip Access app entirely |
+| `--allow <email>` | Restrict access to this email, repeatable |
 
 ---
 
 ## File layout
 
 ```
-~/.zt-config.json              # credentials (0600)
-~/.zt-state.json               # tunnel state (0600)
+~/.zt-config.json                  # credentials (0600)
+~/.zt-state.json                   # tunnel state (0600)
 ~/.zt/tunnels/<name>/
-    config.yml                 # cloudflared config
-    <tunnel-id>.json           # tunnel credentials
-    cloudflared.log            # process log
+    config.yml                     # cloudflared config
+    <tunnel-id>.json               # tunnel credentials
+    cloudflared.log                # cloudflared process log
 ```
 
 ---
@@ -159,14 +170,23 @@ zt status grafana
 **`cloudflared not found in PATH`**
 Install it: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
 
-**Tunnel shows `stopped` but service is still accessible**
-The cloudflared process may have been restarted externally. Run `zt down` + `zt up` to resync state.
+**`502 Bad Gateway` after `zt up`**
+The tunnel is up but the local service isn't running or isn't listening on the specified port. Check with `curl http://localhost:<port>` and look at the log:
+```bash
+tail -f ~/.zt/tunnels/<name>/cloudflared.log
+```
+
+**Tunnel shows `stopped` but URL still works**
+The cloudflared process was restarted outside of zt. Run `zt down <name>` + `zt up <name> <port>` to resync state.
+
+**`tunnel already exists`**
+Run `zt down <name>` first, or check `zt list`. If the tunnel is stale on Cloudflare's side, `zt up` will clean it up automatically.
 
 **`zone not found for domain`**
 Make sure the domain is added to Cloudflare and the API token has Zone / DNS / Edit permission.
 
-**`tunnel already exists`**
-Run `zt down <name>` first, or check `zt list`.
+**Authentication error on Access app creation**
+The API token is missing `Account / Access: Apps and Policies / Edit` permission. Edit the token in Cloudflare dashboard and add it.
 
 ---
 

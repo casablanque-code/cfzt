@@ -8,6 +8,7 @@ import (
 	"github.com/casablanque-code/cfzt/config"
 	"github.com/casablanque-code/cfzt/internal/cloudflare"
 	"github.com/casablanque-code/cfzt/internal/cloudflared"
+	"github.com/casablanque-code/cfzt/internal/docker"
 	"github.com/casablanque-code/cfzt/internal/state"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -16,26 +17,53 @@ import (
 var (
 	flagPublic bool
 	flagEmails []string
+	flagDocker bool
 )
 
 var upCmd = &cobra.Command{
-	Use:   "up <name> <port>",
+	Use:   "up <name> [port]",
 	Short: "Expose a local service via Zero Trust tunnel",
 	Example: `  zt up grafana 3000
+  zt up grafana --docker
   zt up api 8080 --public
   zt up vault 8200 --allow bob@example.com`,
-	Args: cobra.ExactArgs(2),
+	Args: cobra.RangeArgs(1, 2),
 	RunE: runUp,
 }
 
 func init() {
 	upCmd.Flags().BoolVar(&flagPublic, "public", false, "bypass Zero Trust (public access)")
 	upCmd.Flags().StringArrayVar(&flagEmails, "allow", nil, "restrict access to specific emails (repeatable)")
+	upCmd.Flags().BoolVar(&flagDocker, "docker", false, "auto-detect port from Docker container with this name")
 }
 
 func runUp(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	port := args[1]
+	var port string
+
+	if flagDocker {
+		// port from Docker API
+		step := func(msg string) { fmt.Printf("  → %s\n", msg) }
+		okFn := color.New(color.FgGreen).SprintFunc()
+		step("Detecting port for Docker container: " + name)
+		detected, err := docker.FindContainerPort(name)
+		if err != nil {
+			return err
+		}
+		port = detected
+		// allow manual override even with --docker
+		if len(args) == 2 {
+			port = args[1]
+			fmt.Printf("     %s port override: %s (detected: %s)\n", okFn("✓"), port, detected)
+		} else {
+			fmt.Printf("     %s detected port: %s\n", okFn("✓"), port)
+		}
+	} else {
+		if len(args) < 2 {
+			return fmt.Errorf("port required — usage: zt up <name> <port>\n  or use --docker to auto-detect from container")
+		}
+		port = args[1]
+	}
 
 	if _, err := strconv.Atoi(port); err != nil {
 		return fmt.Errorf("port must be a number, got %q", port)
@@ -72,7 +100,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("     %s zone: %s\n", okFn("✓"), zoneID)
 
-	// 2. Create tunnel — check for stale CF tunnel with same name first
+	// 2. Create tunnel — clean up stale CF tunnel with same name first
 	step("Creating Cloudflare tunnel: " + name)
 	if staleID, err := cf.FindTunnelByName(name); err == nil && staleID != "" {
 		fmt.Printf("     %s found stale tunnel %s — cleaning up\n", warnFn("!"), staleID)
@@ -84,7 +112,6 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("     %s tunnel ID: %s\n", okFn("✓"), tunnelID)
 
-	// rollback helper — called on any error after tunnel creation
 	rollback := func(dnsRecordID, accessAppID string) {
 		if accessAppID != "" {
 			_ = cf.DeleteAccessApp(accessAppID)
@@ -104,7 +131,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("     %s ingress: %s → localhost:%s\n", okFn("✓"), hostname, port)
 
-	// 4. Upsert DNS record (removes old conflicting record if present)
+	// 4. Upsert DNS record
 	step("Upserting CNAME: " + hostname)
 	dnsRecordID, err := cf.UpsertCNAME(zoneID, hostname, tunnelID)
 	if err != nil {

@@ -45,13 +45,13 @@ zt up grafana 3000
 ### Option A — go install
 
 ```bash
-go install github.com/casablanque-code/zt/cmd@latest
+go install github.com/casablanque-code/cfzt/cmd@latest
 ```
 
 ### Option B — build from source
 
 ```bash
-git clone https://github.com/casablanque-code/zt
+git clone https://github.com/casablanque-code/cfzt
 cd zt
 go build -o zt ./cmd
 sudo mv zt /usr/local/bin/
@@ -59,7 +59,7 @@ sudo mv zt /usr/local/bin/
 
 ### Option C — download binary
 
-Download from [Releases](https://github.com/casablanque-code/zt/releases) and place in your PATH.
+Download from [Releases](https://github.com/casablanque-code/cfzt/releases) and place in your PATH.
 
 ---
 

@@ -1,4 +1,4 @@
-module github.com/casablanque-code/zt
+module github.com/casablanque-code/cfzt
 
 go 1.22
 

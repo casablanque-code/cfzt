@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="casablanque-code/zt"
+REPO="casablanque-code/cfzt"
 BINARY="zt"
 INSTALL_DIR="/usr/local/bin"
 

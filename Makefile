@@ -1,5 +1,5 @@
 BINARY  := zt
-CMD     := ./cmd
+CMD     := ./cmd/zt
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION) -s -w"
 

@@ -1,0 +1,35 @@
+# .github/workflows/release.yml
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build binaries
+        run: |
+          mkdir -p dist
+          LDFLAGS="-s -w -X main.version=${{ github.ref_name }}"
+          GOOS=linux   GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/zt-linux-amd64   ./cmd/zt
+          GOOS=linux   GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/zt-linux-arm64   ./cmd/zt
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/zt-darwin-amd64  ./cmd/zt
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/zt-darwin-arm64  ./cmd/zt
+          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/zt-windows-amd64.exe ./cmd/zt
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

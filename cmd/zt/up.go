@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/casablanque-code/cfzt/config"
 	"github.com/casablanque-code/cfzt/internal/cloudflare"
 	"github.com/casablanque-code/cfzt/internal/cloudflared"
 	"github.com/casablanque-code/cfzt/internal/docker"
+	"github.com/casablanque-code/cfzt/internal/service"
 	"github.com/casablanque-code/cfzt/internal/state"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -25,8 +27,8 @@ var upCmd = &cobra.Command{
 	Short: "Expose a local service via Zero Trust tunnel",
 	Example: `  zt up grafana 3000
   zt up grafana --docker
-  zt up api 8080 --public
-  zt up vault 8200 --allow bob@example.com`,
+  zt up portainer --docker --allow you@example.com
+  zt up api 8080 --public`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runUp,
 }
@@ -41,17 +43,18 @@ func runUp(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	var port string
 
+	step := func(msg string) { fmt.Printf("  → %s\n", msg) }
+	okFn := color.New(color.FgGreen).SprintFunc()
+	warnFn := color.New(color.FgYellow).SprintFunc()
+	bold := color.New(color.Bold)
+
 	if flagDocker {
-		// port from Docker API
-		step := func(msg string) { fmt.Printf("  → %s\n", msg) }
-		okFn := color.New(color.FgGreen).SprintFunc()
 		step("Detecting port for Docker container: " + name)
 		detected, err := docker.FindContainerPort(name)
 		if err != nil {
 			return err
 		}
 		port = detected
-		// allow manual override even with --docker
 		if len(args) == 2 {
 			port = args[1]
 			fmt.Printf("     %s port override: %s (detected: %s)\n", okFn("✓"), port, detected)
@@ -85,11 +88,6 @@ func runUp(cmd *cobra.Command, args []string) error {
 	cf := cloudflare.NewClient(cfg.APIToken, cfg.AccountID)
 	hostname := name + "." + cfg.Domain
 
-	step := func(msg string) { fmt.Printf("  → %s\n", msg) }
-	okFn := color.New(color.FgGreen).SprintFunc()
-	warnFn := color.New(color.FgYellow).SprintFunc()
-	bold := color.New(color.Bold)
-
 	bold.Printf("\n⚡ Bringing up %s → localhost:%s\n\n", hostname, port)
 
 	// 1. Resolve zone ID
@@ -121,6 +119,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		}
 		_ = cf.DeleteTunnel(tunnelID)
 		_ = cloudflared.CleanTunnelFiles(name)
+		_ = service.Uninstall(name)
 	}
 
 	// 3. Configure tunnel ingress
@@ -149,7 +148,6 @@ func runUp(cmd *cobra.Command, args []string) error {
 			rollback(dnsRecordID, "")
 			return err
 		}
-
 		step("Configuring access policy")
 		if err := cf.CreateBypassPolicy(accessAppID, flagEmails); err != nil {
 			rollback(dnsRecordID, accessAppID)
@@ -157,7 +155,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		}
 		policyDesc := "bypass (public)"
 		if len(flagEmails) > 0 {
-			policyDesc = fmt.Sprintf("allow %v", flagEmails)
+			policyDesc = fmt.Sprintf("allow %s", strings.Join(flagEmails, ", "))
 		}
 		fmt.Printf("     %s access policy: %s\n", okFn("✓"), policyDesc)
 	} else {
@@ -173,17 +171,38 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("     %s config: %s\n", okFn("✓"), cfgPath)
 
-	// 7. Start cloudflared
-	step("Starting cloudflared")
-	pid, err := cloudflared.Start(cfgPath)
-	if err != nil {
-		rollback(dnsRecordID, accessAppID)
-		return err
+	// 7. Install and start systemd/launchd service
+	logPath := strings.TrimSuffix(cfgPath, "config.yml") + "cloudflared.log"
+	step("Installing system service")
+	if err := service.Install(name, cfgPath, logPath); err != nil {
+		// service install failed — fall back to direct process
+		fmt.Printf("     %s service install failed, starting directly: %v\n", warnFn("!"), err)
+		pid, err2 := cloudflared.Start(cfgPath)
+		if err2 != nil {
+			rollback(dnsRecordID, accessAppID)
+			return err2
+		}
+		fmt.Printf("     %s pid: %d (no auto-restart)\n", warnFn("!"), pid)
+		saveTunnel(store, name, tunnelID, hostname, port, pid)
+		fmt.Println()
+		bold.Printf("  🎉 Ready: https://%s\n\n", hostname)
+		return nil
 	}
-	fmt.Printf("     %s pid: %d\n", okFn("✓"), pid)
+	fmt.Printf("     %s service: zt-%s.service (auto-start on boot)\n", okFn("✓"), name)
 
-	// 8. Persist state
-	tunnel := &state.Tunnel{
+	// 8. Persist state (PID=0 — managed by systemd)
+	saveTunnel(store, name, tunnelID, hostname, port, 0)
+	if err := store.Save(); err != nil {
+		return fmt.Errorf("state save failed: %w", err)
+	}
+
+	fmt.Println()
+	bold.Printf("  🎉 Ready: https://%s\n\n", hostname)
+	return nil
+}
+
+func saveTunnel(store *state.Store, name, tunnelID, hostname, port string, pid int) {
+	store.Set(&state.Tunnel{
 		Name:      name,
 		TunnelID:  tunnelID,
 		Port:      mustAtoi(port),
@@ -192,15 +211,8 @@ func runUp(cmd *cobra.Command, args []string) error {
 		Status:    state.StatusRunning,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-	}
-	store.Set(tunnel)
-	if err := store.Save(); err != nil {
-		return fmt.Errorf("state save failed: %w", err)
-	}
-
-	fmt.Println()
-	bold.Printf("  🎉 Ready: https://%s\n\n", hostname)
-	return nil
+	})
+	store.Save()
 }
 
 func mustAtoi(s string) int {

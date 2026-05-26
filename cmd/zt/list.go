@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/casablanque-code/cfzt/internal/cloudflared"
+	"github.com/casablanque-code/cfzt/internal/service"
 	"github.com/casablanque-code/cfzt/internal/state"
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
@@ -225,7 +226,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	for _, t := range tunnels {
 		status := string(t.Status)
 		if t.PID > 0 {
-			if cloudflared.IsRunning(t.PID) {
+			if service.IsActive(t.Name) || (t.PID > 0 && cloudflared.IsRunning(t.PID)) {
 				status = green("running")
 			} else {
 				status = red("stopped")
@@ -271,7 +272,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	green := color.New(color.FgGreen).SprintFunc()
 	red := color.New(color.FgRed).SprintFunc()
 
-	alive := cloudflared.IsRunning(t.PID)
+	alive := service.IsActive(t.Name) || (t.PID > 0 && cloudflared.IsRunning(t.PID))
 	statusStr := red("stopped")
 	if alive {
 		statusStr = green("running")

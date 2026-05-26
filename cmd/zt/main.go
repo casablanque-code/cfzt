@@ -16,7 +16,8 @@ var rootCmd = &cobra.Command{
   zt up <name> <port>          expose a local service
   zt down <name>               tear down a tunnel
   zt list                      list active tunnels
-  zt status <name>             show tunnel details`,
+  zt status <name>             show tunnel details
+  zt logs <name>               show cloudflared logs`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
@@ -27,6 +28,7 @@ func main() {
 	rootCmd.AddCommand(downCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(logsCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)

@@ -19,12 +19,11 @@ var initCmd = &cobra.Command{
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	bold := color.New(color.Bold)
-	green := color.New(color.FgGreen)
-	warn := color.New(color.FgYellow)
+	bold := color.New(color.Bold).SprintFunc()
+	green := color.New(color.FgGreen).SprintFunc()
+	warn := color.New(color.FgYellow).SprintFunc()
 
-	bold.Println("⚡ zt init — Cloudflare Zero Trust setup")
-	fmt.Println()
+	fmt.Printf("%s\n\n", bold("⚡ zt init — Cloudflare Zero Trust setup"))
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -59,8 +58,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	cf := cloudflare.NewClient(token, accountID)
 	if err := cf.VerifyToken(); err != nil {
 		fmt.Println()
-		warn.Printf("  ! Token verification failed: %v\n", err)
-		warn.Println("  ! Config saved, but check your token before running zt up")
+		fmt.Printf("  %s Token verification failed: %v\n", warn("!"), err)
+		fmt.Printf("  %s Config saved, but check your token before running zt up\n", warn("!"))
 		fmt.Println()
 		fmt.Println("  Required token permissions:")
 		fmt.Println("    Account / Cloudflare Tunnel / Edit")
@@ -68,19 +67,19 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println("    Account / Access: Apps and Policies / Edit")
 		return nil
 	}
-	green.Println("✓")
+	fmt.Printf("%s\n", green("✓"))
 
 	fmt.Printf("  → Verifying domain %s... ", domain)
 	if err := cf.VerifyZone(domain); err != nil {
 		fmt.Println()
-		warn.Printf("  ! Domain check failed: %v\n", err)
-		warn.Println("  ! Config saved, but make sure the domain is added to Cloudflare")
+		fmt.Printf("  %s Domain check failed: %v\n", warn("!"), err)
+		fmt.Printf("  %s Config saved, but make sure the domain is added to Cloudflare\n", warn("!"))
 		return nil
 	}
-	green.Println("✓")
+	fmt.Printf("%s\n", green("✓"))
 
 	fmt.Println()
-	green.Printf("  ✓ Config saved to %s\n", config.ConfigFilePath())
+	fmt.Printf("  %s Config saved to %s\n", green("✓"), config.ConfigFilePath())
 	fmt.Println()
 	fmt.Println("  Next: zt up <service_name> <port>")
 	fmt.Println("  Example: zt up portainer --docker --allow you@example.com")

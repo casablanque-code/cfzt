@@ -46,7 +46,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	step := func(msg string) { fmt.Printf("  → %s\n", msg) }
 	okFn := color.New(color.FgGreen).SprintFunc()
 	warnFn := color.New(color.FgYellow).SprintFunc()
-	bold := color.New(color.Bold)
+	boldFmt := color.New(color.Bold).SprintFunc()
 
 	// Check cloudflared version before doing anything
 	if ver, err := cloudflared.GetVersion(); err != nil {
@@ -98,7 +98,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	cf := cloudflare.NewClient(cfg.APIToken, cfg.AccountID)
 	hostname := name + "." + cfg.Domain
 
-	bold.Printf("\n⚡ Bringing up %s → localhost:%s\n\n", hostname, port)
+	fmt.Printf("\n%s\n\n", boldFmt(fmt.Sprintf("⚡ Bringing up %s → localhost:%s", hostname, port)))
 
 	// 1. Resolve zone ID
 	step("Resolving zone ID for " + cfg.Domain)
@@ -193,25 +193,29 @@ func runUp(cmd *cobra.Command, args []string) error {
 			return err2
 		}
 		fmt.Printf("     %s pid: %d (no auto-restart)\n", warnFn("!"), pid)
-		saveTunnel(store, name, tunnelID, hostname, port, pid)
+		if err2 := saveTunnel(store, name, tunnelID, hostname, port, pid); err2 != nil {
+			return fmt.Errorf("state save failed: %w", err2)
+		}
 		fmt.Println()
-		bold.Printf("  🎉 Ready: https://%s\n\n", hostname)
+		fmt.Printf("  %s\n\n", boldFmt(fmt.Sprintf("🎉 Ready: https://%s", hostname)))
 		return nil
 	}
 	fmt.Printf("     %s service: zt-%s.service (auto-start on boot)\n", okFn("✓"), name)
 
 	// 8. Persist state (PID=0 — managed by systemd)
-	saveTunnel(store, name, tunnelID, hostname, port, 0)
+	if err := saveTunnel(store, name, tunnelID, hostname, port, 0); err != nil {
+		return fmt.Errorf("state save failed: %w", err)
+	}
 	if err := store.Save(); err != nil {
 		return fmt.Errorf("state save failed: %w", err)
 	}
 
 	fmt.Println()
-	bold.Printf("  🎉 Ready: https://%s\n\n", hostname)
+	fmt.Printf("  %s\n\n", boldFmt(fmt.Sprintf("🎉 Ready: https://%s", hostname)))
 	return nil
 }
 
-func saveTunnel(store *state.Store, name, tunnelID, hostname, port string, pid int) {
+func saveTunnel(store *state.Store, name, tunnelID, hostname, port string, pid int) error {
 	store.Set(&state.Tunnel{
 		Name:      name,
 		TunnelID:  tunnelID,
@@ -222,7 +226,7 @@ func saveTunnel(store *state.Store, name, tunnelID, hostname, port string, pid i
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	})
-	store.Save()
+	return store.Save()
 }
 
 func mustAtoi(s string) int {

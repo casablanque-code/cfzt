@@ -94,7 +94,7 @@ func tailFile(path string, n int) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var lines []string
 	scanner := bufio.NewScanner(f)
@@ -115,7 +115,7 @@ func followFile(path string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := f.Seek(0, io.SeekEnd); err != nil {
 		return err
@@ -276,13 +276,13 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("tunnel %q not found", name)
 	}
 
-	bold := color.New(color.Bold)
+	boldFmt := color.New(color.Bold).SprintFunc()
 
 	statusStr, managedBy := tunnelStatus(t)
 	path, _ := logPath(t.Name)
 
 	fmt.Println()
-	bold.Printf("  %s\n", t.Name)
+	fmt.Printf("  %s\n", boldFmt(t.Name))
 	fmt.Printf("  URL:        https://%s\n", t.Hostname)
 	fmt.Printf("  Port:       %d\n", t.Port)
 	fmt.Printf("  Tunnel ID:  %s\n", t.TunnelID)

@@ -125,7 +125,7 @@ func Uninstall(name string) error {
 		{"systemctl", "--user", "daemon-reload"},
 	}
 	for _, args := range cmds {
-		exec.Command(args[0], args[1:]...).Run()
+		_ = exec.Command(args[0], args[1:]...).Run()
 	}
 
 	path, err := unitPath(name)

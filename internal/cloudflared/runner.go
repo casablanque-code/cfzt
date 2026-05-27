@@ -1,5 +1,3 @@
-//go:build !windows
-
 package cloudflared
 
 import (
@@ -28,14 +26,14 @@ func Start(configPath string) (int, error) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
 	if err := cmd.Start(); err != nil {
-		logFile.Close()
+		_ = logFile.Close()
 		return 0, fmt.Errorf("failed to start cloudflared: %w", err)
 	}
 
 	// Detach — don't wait
 	go func() {
-		cmd.Wait()
-		logFile.Close()
+		_ = cmd.Wait()
+		_ = logFile.Close()
 	}()
 
 	return cmd.Process.Pid, nil

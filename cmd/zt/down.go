@@ -40,9 +40,9 @@ func runDown(cmd *cobra.Command, args []string) error {
 	cf := cloudflare.NewClient(cfg.APIToken, cfg.AccountID)
 	okFn := color.New(color.FgGreen).SprintFunc()
 	warnFn := color.New(color.FgYellow).SprintFunc()
-	bold := color.New(color.Bold)
+	boldFmt := color.New(color.Bold).SprintFunc()
 
-	bold.Printf("\n⚡ Tearing down %s\n\n", name)
+	fmt.Printf("\n%s\n\n", boldFmt("⚡ Tearing down "+name))
 
 	step := func(msg string) { fmt.Printf("  → %s\n", msg) }
 
@@ -120,6 +120,6 @@ func runDown(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	bold.Printf("  ✓ %s torn down\n\n", name)
+	fmt.Printf("  %s\n\n", boldFmt("✓ "+name+" torn down"))
 	return nil
 }

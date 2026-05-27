@@ -1,0 +1,24 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - (*github.com/fatih/color.Color).Print
+      - (*github.com/fatih/color.Color).Printf
+      - (*github.com/fatih/color.Color).Println
+      - (*github.com/fatih/color.Color).Sprint
+      - (*github.com/fatih/color.Color).Sprintf
+      - (*github.com/fatih/color.Color).Sprintln

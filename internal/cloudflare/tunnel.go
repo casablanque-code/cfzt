@@ -59,7 +59,7 @@ func (c *Client) CreateTunnel(name string) (tunnelID string, credJSON []byte, er
 	if err != nil {
 		return "", nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var tr TunnelResponse
 	if err := decode(resp, &tr); err != nil {
@@ -96,7 +96,7 @@ func (c *Client) ConfigureTunnel(tunnelID, hostname, localPort string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Success bool     `json:"success"`
@@ -119,7 +119,7 @@ func (c *Client) DeleteTunnel(tunnelID string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Success bool     `json:"success"`
@@ -142,7 +142,7 @@ func (c *Client) ListTunnels() ([]struct{ ID, Name, Status string }, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var tr TunnelListResponse
 	if err := decode(resp, &tr); err != nil {
@@ -176,7 +176,7 @@ func (c *Client) FindTunnelByName(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var tr TunnelListResponse
 	if err := decode(resp, &tr); err != nil {

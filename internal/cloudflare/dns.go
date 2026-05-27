@@ -35,7 +35,7 @@ func (c *Client) GetZoneID(domain string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Result []struct {
@@ -85,7 +85,7 @@ func (c *Client) UpsertCNAME(zoneID, subdomain, tunnelID string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var dr dnsCreateResponse
 	if err := decode(resp, &dr); err != nil {
@@ -105,7 +105,7 @@ func (c *Client) DeleteDNSRecord(zoneID, recordID string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Success bool     `json:"success"`
@@ -128,7 +128,7 @@ func (c *Client) FindDNSRecord(zoneID, name string) (*DNSRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var lr dnsListResponse
 	if err := decode(resp, &lr); err != nil {

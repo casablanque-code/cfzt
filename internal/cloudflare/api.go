@@ -61,8 +61,8 @@ func generateSecret() string {
 
 type tokenVerifyResult struct {
 	Result struct {
-		ID       string `json:"id"`
-		Status   string `json:"status"`
+		ID        string `json:"id"`
+		Status    string `json:"status"`
 		NotBefore string `json:"not_before"`
 		ExpiresOn string `json:"expires_on"`
 	} `json:"result"`
@@ -77,7 +77,7 @@ func (c *Client) VerifyToken() error {
 	if err != nil {
 		return fmt.Errorf("could not reach Cloudflare API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result tokenVerifyResult
 	if err := decode(resp, &result); err != nil {

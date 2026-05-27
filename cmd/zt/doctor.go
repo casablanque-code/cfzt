@@ -22,10 +22,11 @@ var doctorCmd = &cobra.Command{
 }
 
 var (
-	pass = color.New(color.FgGreen).SprintFunc()
-	fail = color.New(color.FgRed).SprintFunc()
-	warn = color.New(color.FgYellow).SprintFunc()
-	dim  = color.New(color.FgHiBlack).SprintFunc()
+	pass    = color.New(color.FgGreen).SprintFunc()
+	fail    = color.New(color.FgRed).SprintFunc()
+	warn    = color.New(color.FgYellow).SprintFunc()
+	dim     = color.New(color.FgHiBlack).SprintFunc()
+	boldFmt = color.New(color.Bold).SprintFunc()
 )
 
 func check(label string, err error, hint string) bool {
@@ -67,7 +68,7 @@ func checkPort(port int) error {
 	if err != nil {
 		return fmt.Errorf("nothing listening on localhost:%d", port)
 	}
-	conn.Close()
+	_ = conn.Close()
 	return nil
 }
 
@@ -83,11 +84,10 @@ func checkDNS(hostname string) error {
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {
-	bold := color.New(color.Bold)
 	problems := 0
 
 	fmt.Println()
-	bold.Println("  System")
+	fmt.Printf("  %s\n", boldFmt("System"))
 	fmt.Println()
 
 	// 1. cloudflared installed + version
@@ -108,7 +108,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 
 	// 2. Config exists
 	fmt.Println()
-	bold.Println("  Cloudflare")
+	fmt.Printf("  %s\n", boldFmt("Cloudflare"))
 	fmt.Println()
 
 	cfg, err := config.Load()
@@ -142,13 +142,13 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	tunnels := store.All()
 	if len(tunnels) == 0 {
 		fmt.Println()
-		bold.Println("  Tunnels")
+		fmt.Printf("  %s\n", boldFmt("Tunnels"))
 		fmt.Println()
 		fmt.Printf("  %s  no tunnels configured\n", dim("–"))
 	} else {
 		for _, t := range tunnels {
 			fmt.Println()
-			bold.Printf("  Tunnel: %s\n", t.Name)
+			fmt.Printf("  %s\n", boldFmt("Tunnel: "+t.Name))
 			fmt.Println()
 
 			// process / systemd
@@ -221,11 +221,10 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 }
 
 func printSummary(problems int) {
-	bold := color.New(color.Bold)
 	if problems == 0 {
-		bold.Printf("  %s all checks passed\n\n", pass("✓"))
+		fmt.Printf("  %s all checks passed\n\n", boldFmt(pass("✓")))
 	} else {
-		bold.Printf("  %s %s found\n\n", fail("✗"), pluralize(problems, "problem"))
+		fmt.Printf("  %s %s found\n\n", boldFmt(fail("✗")), pluralize(problems, "problem"))
 	}
 }
 

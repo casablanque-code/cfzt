@@ -57,7 +57,7 @@ func (c *Client) FindAccessAppByDomain(hostname string) (*AccessApp, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var lr accessListResponse
 	if err := decode(resp, &lr); err != nil {
@@ -103,7 +103,7 @@ func (c *Client) UpsertAccessApp(hostname, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var ar accessAppResponse
 	if err := decode(resp, &ar); err != nil {
@@ -149,7 +149,7 @@ func (c *Client) CreateBypassPolicy(appID string, emails []string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Success bool     `json:"success"`
@@ -172,7 +172,7 @@ func (c *Client) DeleteAccessApp(appID string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Success bool     `json:"success"`

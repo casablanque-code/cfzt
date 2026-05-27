@@ -51,7 +51,7 @@ func apiVersion() string {
 	if err != nil {
 		return "v1.44" // safe fallback
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 
 	var result struct {
@@ -78,7 +78,7 @@ func dockerGet(path string, v any) error {
 	if err != nil {
 		return fmt.Errorf("docker socket unavailable: %w\n  hint: is Docker running? check `docker ps`", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

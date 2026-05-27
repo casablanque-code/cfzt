@@ -31,9 +31,9 @@ func runRestart(cmd *cobra.Command, args []string) error {
 	}
 
 	okFn := color.New(color.FgGreen).SprintFunc()
-	bold := color.New(color.Bold)
+	boldFmt := color.New(color.Bold).SprintFunc()
 
-	bold.Printf("\n⚡ Restarting %s\n\n", name)
+	fmt.Printf("\n%s\n\n", boldFmt("⚡ Restarting "+name))
 
 	if service.IsInstalled(name) {
 		fmt.Printf("  → systemctl --user restart zt-%s\n", name)

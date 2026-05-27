@@ -84,6 +84,20 @@ func Install(name, configPath, logPath string) error {
 	return nil
 }
 
+// Restart unloads and reloads the LaunchAgent.
+func Restart(name string) error {
+	path, err := plistPath(name)
+	if err != nil {
+		return err
+	}
+	exec.Command("launchctl", "unload", path).Run()
+	out, err := exec.Command("launchctl", "load", "-w", path).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("launchctl load: %w\n%s", err, out)
+	}
+	return nil
+}
+
 // Uninstall unloads and removes the LaunchAgent plist.
 func Uninstall(name string) error {
 	path, err := plistPath(name)
@@ -112,3 +126,6 @@ func IsInstalled(name string) bool {
 	_, err = os.Stat(path)
 	return err == nil
 }
+
+// LingerEnabled always returns true on macOS — LaunchAgents run at login automatically.
+func LingerEnabled() bool { return true }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 )
@@ -50,11 +51,39 @@ func cloudflaredBin() (string, error) {
 	return path, nil
 }
 
-// Install creates a systemd user unit and enables it.
+// ensureLinger enables systemd linger for the current user so that
+// user services survive without an active login session.
+func ensureLinger() error {
+	u, err := user.Current()
+	if err != nil {
+		return fmt.Errorf("could not determine current user: %w", err)
+	}
+
+	// check current linger status
+	out, err := exec.Command("loginctl", "show-user", u.Username, "--property=Linger").Output()
+	if err == nil && strings.TrimSpace(string(out)) == "Linger=yes" {
+		return nil // already enabled
+	}
+
+	// enable linger
+	if out, err := exec.Command("loginctl", "enable-linger", u.Username).CombinedOutput(); err != nil {
+		return fmt.Errorf("loginctl enable-linger failed: %w\n%s", err, out)
+	}
+	return nil
+}
+
+// Install creates a systemd user unit, enables linger, and starts the service.
 func Install(name, configPath, logPath string) error {
 	bin, err := cloudflaredBin()
 	if err != nil {
 		return err
+	}
+
+	// ensure linger so service survives after logout / reboot without session
+	if err := ensureLinger(); err != nil {
+		// non-fatal — warn but continue
+		fmt.Printf("     ! linger not enabled: %v\n", err)
+		fmt.Println("       tunnel may not start on boot without an active session")
 	}
 
 	unit := fmt.Sprintf(unitTemplate, name, bin, configPath, logPath, logPath)
@@ -67,7 +96,6 @@ func Install(name, configPath, logPath string) error {
 		return fmt.Errorf("failed to write unit file: %w", err)
 	}
 
-	// reload daemon and enable+start
 	cmds := [][]string{
 		{"systemctl", "--user", "daemon-reload"},
 		{"systemctl", "--user", "enable", "--now", unitName(name)},
@@ -81,6 +109,15 @@ func Install(name, configPath, logPath string) error {
 	return nil
 }
 
+// Restart restarts the systemd user unit.
+func Restart(name string) error {
+	out, err := exec.Command("systemctl", "--user", "restart", unitName(name)).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("systemctl restart: %w\n%s", err, out)
+	}
+	return nil
+}
+
 // Uninstall stops, disables, and removes the systemd user unit.
 func Uninstall(name string) error {
 	cmds := [][]string{
@@ -88,7 +125,6 @@ func Uninstall(name string) error {
 		{"systemctl", "--user", "daemon-reload"},
 	}
 	for _, args := range cmds {
-		// ignore errors — unit may already be gone
 		exec.Command(args[0], args[1:]...).Run()
 	}
 
@@ -116,4 +152,17 @@ func IsInstalled(name string) bool {
 	}
 	_, err = os.Stat(path)
 	return err == nil
+}
+
+// LingerEnabled returns true if linger is active for the current user.
+func LingerEnabled() bool {
+	u, err := user.Current()
+	if err != nil {
+		return false
+	}
+	out, err := exec.Command("loginctl", "show-user", u.Username, "--property=Linger").Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "Linger=yes"
 }

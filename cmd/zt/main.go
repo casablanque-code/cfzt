@@ -15,6 +15,7 @@ var rootCmd = &cobra.Command{
   zt init                      configure API credentials
   zt up <name> <port>          expose a local service
   zt down <name>               tear down a tunnel
+  zt restart <name>            restart cloudflared for a tunnel
   zt list                      list active tunnels
   zt status <name>             show tunnel details
   zt logs <name>               show cloudflared logs
@@ -27,6 +28,7 @@ func main() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(upCmd)
 	rootCmd.AddCommand(downCmd)
+	rootCmd.AddCommand(restartCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(logsCmd)

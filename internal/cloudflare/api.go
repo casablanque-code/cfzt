@@ -58,3 +58,46 @@ func generateSecret() string {
 	rand.Read(b)
 	return base64.StdEncoding.EncodeToString(b)
 }
+
+type tokenVerifyResult struct {
+	Result struct {
+		ID       string `json:"id"`
+		Status   string `json:"status"`
+		NotBefore string `json:"not_before"`
+		ExpiresOn string `json:"expires_on"`
+	} `json:"result"`
+	Success bool     `json:"success"`
+	Errors  []APIErr `json:"errors"`
+}
+
+// VerifyToken checks that the API token is valid and active.
+// Returns a descriptive error if the token is invalid, expired, or lacks permissions.
+func (c *Client) VerifyToken() error {
+	resp, err := c.do("GET", "/user/tokens/verify", nil)
+	if err != nil {
+		return fmt.Errorf("could not reach Cloudflare API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result tokenVerifyResult
+	if err := decode(resp, &result); err != nil {
+		return fmt.Errorf("unexpected API response: %w", err)
+	}
+
+	if resp.StatusCode == 401 {
+		return fmt.Errorf("token is invalid or revoked — check Cloudflare → My Profile → API Tokens")
+	}
+	if !result.Success {
+		return apiErr(result.Errors)
+	}
+	if result.Result.Status != "active" {
+		return fmt.Errorf("token status is %q (expected active)", result.Result.Status)
+	}
+	return nil
+}
+
+// VerifyZone checks that the given domain exists in the account.
+func (c *Client) VerifyZone(domain string) error {
+	_, err := c.GetZoneID(domain)
+	return err
+}

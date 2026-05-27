@@ -53,7 +53,6 @@ func init() {
 	logsCmd.Flags().BoolVarP(&flagLogsFollow, "follow", "f", false, "follow log output")
 }
 
-// log line colorizers
 var (
 	reError = regexp.MustCompile(`(?i)\b(error|err|fatal|fail|failed|failure)\b`)
 	reWarn  = regexp.MustCompile(`(?i)\b(warn|warning)\b`)
@@ -75,7 +74,6 @@ func colorizeLine(line string) string {
 	case reOK.MatchString(line):
 		return colorOK(line)
 	default:
-		// dim the timestamp prefix, keep the rest normal
 		if len(line) > 20 {
 			return colorDim(line[:20]) + line[20:]
 		}
@@ -91,7 +89,6 @@ func logPath(name string) (string, error) {
 	return strings.TrimSuffix(cfgPath, "config.yml") + "cloudflared.log", nil
 }
 
-// tailFile returns the last n lines of a file.
 func tailFile(path string, n int) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -113,7 +110,6 @@ func tailFile(path string, n int) ([]string, error) {
 	return lines, nil
 }
 
-// followFile tails a file and streams new lines until interrupted.
 func followFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -121,7 +117,6 @@ func followFile(path string) error {
 	}
 	defer f.Close()
 
-	// seek to end
 	if _, err := f.Seek(0, io.SeekEnd); err != nil {
 		return err
 	}
@@ -193,6 +188,38 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	return printLogs(name, flagLogsN)
 }
 
+// tunnelStatus resolves the real runtime status of a tunnel.
+// Priority: systemd > direct PID > stopped.
+func tunnelStatus(t *state.Tunnel) (statusStr, managedBy string) {
+	green := color.New(color.FgGreen).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
+	dim := color.New(color.FgHiBlack).SprintFunc()
+
+	if service.IsInstalled(t.Name) {
+		managedBy = "systemd"
+		if service.IsActive(t.Name) {
+			statusStr = green("running")
+		} else {
+			statusStr = red("stopped")
+		}
+		return
+	}
+
+	if t.PID > 0 {
+		managedBy = fmt.Sprintf("pid %d", t.PID)
+		if cloudflared.IsRunning(t.PID) {
+			statusStr = green("running")
+		} else {
+			statusStr = red("stopped")
+		}
+		return
+	}
+
+	managedBy = dim("none")
+	statusStr = red("stopped")
+	return
+}
+
 func runList(cmd *cobra.Command, args []string) error {
 	store, err := state.LoadStore()
 	if err != nil {
@@ -210,7 +237,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	})
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"NAME", "URL", "PORT", "STATUS", "PID"})
+	table.SetHeader([]string{"NAME", "URL", "PORT", "STATUS", "MANAGED BY"})
 	table.SetBorder(false)
 	table.SetColumnSeparator("  ")
 	table.SetHeaderLine(false)
@@ -219,33 +246,14 @@ func runList(cmd *cobra.Command, args []string) error {
 	table.SetTablePadding("  ")
 	table.SetNoWhiteSpace(true)
 
-	green := color.New(color.FgGreen).SprintFunc()
-	red := color.New(color.FgRed).SprintFunc()
-	yellow := color.New(color.FgYellow).SprintFunc()
-
 	for _, t := range tunnels {
-		status := string(t.Status)
-		if t.PID > 0 {
-			if service.IsActive(t.Name) || (t.PID > 0 && cloudflared.IsRunning(t.PID)) {
-				status = green("running")
-			} else {
-				status = red("stopped")
-			}
-		} else {
-			status = yellow("unknown")
-		}
-
-		pid := "-"
-		if t.PID > 0 {
-			pid = fmt.Sprintf("%d", t.PID)
-		}
-
+		status, managedBy := tunnelStatus(t)
 		table.Append([]string{
 			t.Name,
 			"https://" + t.Hostname,
 			fmt.Sprintf("%d", t.Port),
 			status,
-			pid,
+			managedBy,
 		})
 	}
 
@@ -269,15 +277,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	bold := color.New(color.Bold)
-	green := color.New(color.FgGreen).SprintFunc()
-	red := color.New(color.FgRed).SprintFunc()
 
-	alive := service.IsActive(t.Name) || (t.PID > 0 && cloudflared.IsRunning(t.PID))
-	statusStr := red("stopped")
-	if alive {
-		statusStr = green("running")
-	}
-
+	statusStr, managedBy := tunnelStatus(t)
 	path, _ := logPath(t.Name)
 
 	fmt.Println()
@@ -285,7 +286,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  URL:        https://%s\n", t.Hostname)
 	fmt.Printf("  Port:       %d\n", t.Port)
 	fmt.Printf("  Tunnel ID:  %s\n", t.TunnelID)
-	fmt.Printf("  PID:        %d\n", t.PID)
+	fmt.Printf("  Managed by: %s\n", managedBy)
 	fmt.Printf("  Status:     %s\n", statusStr)
 	fmt.Printf("  Created:    %s\n", t.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Printf("  Log:        %s\n", path)

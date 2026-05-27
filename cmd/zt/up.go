@@ -48,6 +48,16 @@ func runUp(cmd *cobra.Command, args []string) error {
 	warnFn := color.New(color.FgYellow).SprintFunc()
 	bold := color.New(color.Bold)
 
+	// Check cloudflared version before doing anything
+	if ver, err := cloudflared.GetVersion(); err != nil {
+		return err
+	} else if ver.TooOld() {
+		fmt.Printf("  %s cloudflared version %s is too old (minimum: %d.x)\n",
+			warnFn("!"), ver, cloudflared.MinYear())
+		fmt.Printf("     upgrade: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/\n")
+		return fmt.Errorf("unsupported cloudflared version")
+	}
+
 	if flagDocker {
 		step("Detecting port for Docker container: " + name)
 		detected, err := docker.FindContainerPort(name)

@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
-	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/casablanque-code/cfzt/config"
@@ -56,16 +54,11 @@ func checkWarn(label string, err error, hint string) {
 }
 
 func checkCloudflared() (string, error) {
-	path, err := exec.LookPath("cloudflared")
+	ver, err := cloudflared.GetVersion()
 	if err != nil {
-		return "", fmt.Errorf("cloudflared not found in PATH")
+		return "", err
 	}
-	out, err := exec.Command(path, "--version").Output()
-	if err != nil {
-		return "", fmt.Errorf("cloudflared found but --version failed: %w", err)
-	}
-	version := strings.TrimSpace(string(out))
-	return version, nil
+	return ver.Raw, nil
 }
 
 func checkPort(port int) error {
@@ -97,13 +90,20 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	bold.Println("  System")
 	fmt.Println()
 
-	// 1. cloudflared installed
+	// 1. cloudflared installed + version
 	version, err := checkCloudflared()
 	if !check("cloudflared installed", err,
 		"https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/") {
 		problems++
 	} else {
 		fmt.Printf("     %s %s\n", dim("version:"), dim(version))
+		if ver, verErr := cloudflared.GetVersion(); verErr == nil && ver.TooOld() {
+			fmt.Printf("  %s  cloudflared version %s is too old (minimum: %d.x)\n",
+				warn("!"), ver, cloudflared.MinYear())
+			fmt.Printf("     %s upgrade: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/\n",
+				dim("hint:"))
+			problems++
+		}
 	}
 
 	// 2. Config exists

@@ -1,5 +1,7 @@
 # zt — Zero Trust tunnel manager
 
+[![CI](https://github.com/casablanque-code/cfzt/actions/workflows/ci.yml/badge.svg)](https://github.com/casablanque-code/cfzt/actions/workflows/ci.yml)
+
 One command to expose a local service through Cloudflare Zero Trust.
 
 ```bash

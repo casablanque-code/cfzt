@@ -6,6 +6,7 @@ One command to expose a local service through Cloudflare Zero Trust.
 zt up portainer --docker --allow you@example.com
 # → https://portainer.yourdomain.com  (ZT-protected, live in ~15s)
 ```
+![zt demo](demo.gif)
 
 ## What it does
 

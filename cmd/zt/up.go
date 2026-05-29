@@ -17,9 +17,11 @@ import (
 )
 
 var (
-	flagPublic bool
-	flagEmails []string
-	flagDocker bool
+	flagPublic   bool
+	flagEmails   []string
+	flagDocker   bool
+	flagTCP      bool
+	flagProtocol string
 )
 
 var upCmd = &cobra.Command{
@@ -28,7 +30,8 @@ var upCmd = &cobra.Command{
 	Example: `  zt up grafana 3000
   zt up grafana --docker
   zt up portainer --docker --allow you@example.com
-  zt up api 8080 --public`,
+  zt up api 8080 --public
+  zt up portainer 9000 --tcp`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runUp,
 }
@@ -37,6 +40,8 @@ func init() {
 	upCmd.Flags().BoolVar(&flagPublic, "public", false, "bypass Zero Trust (public access)")
 	upCmd.Flags().StringArrayVar(&flagEmails, "allow", nil, "restrict access to specific emails (repeatable)")
 	upCmd.Flags().BoolVar(&flagDocker, "docker", false, "auto-detect port from Docker container with this name")
+	upCmd.Flags().BoolVar(&flagTCP, "tcp", false, "force TCP (http2) protocol — use if QUIC/UDP is blocked by your ISP")
+	upCmd.Flags().StringVar(&flagProtocol, "protocol", "auto", "cloudflared protocol: auto, quic, http2")
 }
 
 func runUp(cmd *cobra.Command, args []string) error {
@@ -173,8 +178,15 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 
 	// 6. Write cloudflared config
+	protocol := flagProtocol
+	if flagTCP {
+		protocol = "http2"
+	}
+	if protocol != "auto" && protocol != "quic" && protocol != "http2" {
+		return fmt.Errorf("invalid protocol %q — use: auto, quic, http2", protocol)
+	}
 	step("Writing cloudflared config")
-	cfgPath, err := cloudflared.WriteTunnelConfig(tunnelID, name, hostname, port, credJSON)
+	cfgPath, err := cloudflared.WriteTunnelConfig(tunnelID, name, hostname, port, protocol, credJSON)
 	if err != nil {
 		rollback(dnsRecordID, accessAppID)
 		return err
@@ -193,7 +205,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 			return err2
 		}
 		fmt.Printf("     %s pid: %d (no auto-restart)\n", warnFn("!"), pid)
-		if err2 := saveTunnel(store, name, tunnelID, hostname, port, pid); err2 != nil {
+		if err2 := saveTunnel(store, name, tunnelID, hostname, port, protocol, pid); err2 != nil {
 			return fmt.Errorf("state save failed: %w", err2)
 		}
 		fmt.Println()
@@ -203,7 +215,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	fmt.Printf("     %s service: zt-%s.service (auto-start on boot)\n", okFn("✓"), name)
 
 	// 8. Persist state (PID=0 — managed by systemd)
-	if err := saveTunnel(store, name, tunnelID, hostname, port, 0); err != nil {
+	if err := saveTunnel(store, name, tunnelID, hostname, port, protocol, 0); err != nil {
 		return fmt.Errorf("state save failed: %w", err)
 	}
 	if err := store.Save(); err != nil {
@@ -215,12 +227,13 @@ func runUp(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func saveTunnel(store *state.Store, name, tunnelID, hostname, port string, pid int) error {
+func saveTunnel(store *state.Store, name, tunnelID, hostname, port, protocol string, pid int) error {
 	store.Set(&state.Tunnel{
 		Name:      name,
 		TunnelID:  tunnelID,
 		Port:      mustAtoi(port),
 		Hostname:  hostname,
+		Protocol:  state.Protocol(protocol),
 		PID:       pid,
 		Status:    state.StatusRunning,
 		CreatedAt: time.Now(),

@@ -287,6 +287,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Port:       %d\n", t.Port)
 	fmt.Printf("  Tunnel ID:  %s\n", t.TunnelID)
 	fmt.Printf("  Managed by: %s\n", managedBy)
+	fmt.Printf("  Protocol:   %s\n", protocolLabel(t.Protocol))
 	fmt.Printf("  Status:     %s\n", statusStr)
 	fmt.Printf("  Created:    %s\n", t.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Printf("  Log:        %s\n", path)
@@ -296,4 +297,15 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return printLogs(name, 30)
 	}
 	return nil
+}
+
+func protocolLabel(p state.Protocol) string {
+	switch p {
+	case state.ProtocolHTTP2:
+		return "http2 (TCP)"
+	case state.ProtocolQUIC:
+		return "quic (UDP)"
+	default:
+		return "auto"
+	}
 }

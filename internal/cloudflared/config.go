@@ -7,8 +7,8 @@ import (
 )
 
 // WriteTunnelConfig writes a cloudflared config.yml and credentials file.
-// Returns the path to the config file.
-func WriteTunnelConfig(tunnelID, tunnelName, hostname, port string, credJSON []byte) (string, error) {
+// protocol can be "auto", "quic", or "http2". Empty string defaults to "auto".
+func WriteTunnelConfig(tunnelID, tunnelName, hostname, port, protocol string, credJSON []byte) (string, error) {
 	dir, err := tunnelDir(tunnelName)
 	if err != nil {
 		return "", err
@@ -17,21 +17,24 @@ func WriteTunnelConfig(tunnelID, tunnelName, hostname, port string, credJSON []b
 		return "", fmt.Errorf("failed to create tunnel dir: %w", err)
 	}
 
-	// Write credentials file
 	credPath := filepath.Join(dir, tunnelID+".json")
 	if err := os.WriteFile(credPath, credJSON, 0600); err != nil {
 		return "", fmt.Errorf("failed to write credentials: %w", err)
 	}
 
-	// Write config.yml
+	if protocol == "" || protocol == "auto" {
+		protocol = "auto"
+	}
+
 	cfgContent := fmt.Sprintf(`tunnel: %s
 credentials-file: %s
+protocol: %s
 
 ingress:
   - hostname: %s
     service: http://localhost:%s
   - service: http_status:404
-`, tunnelID, credPath, hostname, port)
+`, tunnelID, credPath, protocol, hostname, port)
 
 	cfgPath := filepath.Join(dir, "config.yml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0600); err != nil {

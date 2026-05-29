@@ -5,6 +5,7 @@ import (
 	"net"
 	"strconv"
 	"time"
+	"os"
 
 	"github.com/casablanque-code/cfzt/config"
 	"github.com/casablanque-code/cfzt/internal/cloudflare"
@@ -104,6 +105,15 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 				dim("hint:"))
 			problems++
 		}
+	}
+
+	// linger check
+	if !service.LingerEnabled() {
+	    fmt.Printf("  %s  linger not enabled — tunnels may not start after reboot\n", warn("!"))
+   	 fmt.Printf("     %s run: loginctl enable-linger %s\n", dim("hint:"), os.Getenv("USER"))
+   	 problems++
+	} else {
+   	 fmt.Printf("  %s  systemd linger enabled\n", pass("✓"))
 	}
 
 	// 2. Config exists

@@ -118,6 +118,9 @@ zt up api 8080 --public
 
 # ZT Access app created but bypass policy (no login required)
 zt up grafana 3000
+
+# Force TCP if QUIC is blocked by your ISP
+zt up portainer 9000 --tcp
 ```
 
 The service becomes available at `https://<name>.<domain>`.
@@ -157,6 +160,7 @@ zt status portainer
   Tunnel ID:  07fc193d-d05e-48eb-bb00-22be71823b14
   Managed by: systemd
   Status:     running
+  Protocol:   http2 (TCP)
   Created:    2026-05-27 00:01:08
   Log:        /root/.zt/tunnels/portainer/cloudflared.log
 ```
@@ -215,6 +219,8 @@ zt doctor
 | `--allow <email>` | Restrict access to this email via Cloudflare Access (repeatable) |
 | `--public` | No Zero Trust gate — skip Access app entirely |
 | `--docker` | Auto-detect port from a running Docker container with this name |
+| `--tcp` | Force TCP (http2) — use if QUIC/UDP is blocked by your ISP |
+| `--protocol <proto>` | Protocol: `auto` (default), `quic`, `http2` |
 
 ### `zt logs`
 

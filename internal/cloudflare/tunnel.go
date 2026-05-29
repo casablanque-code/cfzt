@@ -59,7 +59,7 @@ func (c *Client) CreateTunnel(name string) (tunnelID string, credJSON []byte, er
 	if err != nil {
 		return "", nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeBody(resp)
 
 	var tr TunnelResponse
 	if err := decode(resp, &tr); err != nil {
@@ -96,7 +96,7 @@ func (c *Client) ConfigureTunnel(tunnelID, hostname, localPort string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeBody(resp)
 
 	var result struct {
 		Success bool     `json:"success"`
@@ -119,7 +119,7 @@ func (c *Client) DeleteTunnel(tunnelID string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeBody(resp)
 
 	var result struct {
 		Success bool     `json:"success"`
@@ -142,7 +142,7 @@ func (c *Client) ListTunnels() ([]struct{ ID, Name, Status string }, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeBody(resp)
 
 	var tr TunnelListResponse
 	if err := decode(resp, &tr); err != nil {
@@ -176,7 +176,7 @@ func (c *Client) FindTunnelByName(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeBody(resp)
 
 	var tr TunnelListResponse
 	if err := decode(resp, &tr); err != nil {
@@ -191,4 +191,31 @@ func (c *Client) FindTunnelByName(name string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// GetTunnelStatus returns the current status of a tunnel from Cloudflare.
+// Possible values: active, degraded, inactive, down.
+func (c *Client) GetTunnelStatus(tunnelID string) (string, error) {
+	resp, err := c.do("GET",
+		fmt.Sprintf("/accounts/%s/cfd_tunnel/%s", c.AccountID, tunnelID),
+		nil)
+	if err != nil {
+		return "", err
+	}
+	defer closeBody(resp)
+
+	var result struct {
+		Result struct {
+			Status string `json:"status"`
+		} `json:"result"`
+		Success bool     `json:"success"`
+		Errors  []APIErr `json:"errors"`
+	}
+	if err := decode(resp, &result); err != nil {
+		return "", err
+	}
+	if !result.Success {
+		return "", apiErr(result.Errors)
+	}
+	return result.Result.Status, nil
 }

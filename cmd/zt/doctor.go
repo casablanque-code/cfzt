@@ -107,16 +107,16 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// linger check
+	// 2. Linger check (Linux only)
 	if !service.LingerEnabled() {
-	    fmt.Printf("  %s  linger not enabled — tunnels may not start after reboot\n", warn("!"))
-   	 fmt.Printf("     %s run: loginctl enable-linger %s\n", dim("hint:"), os.Getenv("USER"))
-   	 problems++
+		fmt.Printf("  %s  linger not enabled — tunnels may not start after reboot\n", warn("!"))
+		fmt.Printf("     %s run: loginctl enable-linger %s\n", dim("hint:"), os.Getenv("USER"))
+		problems++
 	} else {
-   	 fmt.Printf("  %s  systemd linger enabled\n", pass("✓"))
+		fmt.Printf("  %s  systemd linger enabled\n", pass("✓"))
 	}
 
-	// 2. Config exists
+	// 3. Config exists
 	fmt.Println()
 	fmt.Printf("  %s\n", boldFmt("Cloudflare"))
 	fmt.Println()
@@ -201,23 +201,34 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 				problems++
 			}
 
-			// CF tunnel exists
-			cfTunnelErr := func() error {
-				id, err := cf.FindTunnelByName(t.Name)
-				if err != nil {
-					return err
+			// CF tunnel status
+			cfStatus, cfErr := cf.GetTunnelStatus(t.TunnelID)
+			if cfErr != nil {
+				if !check("Cloudflare tunnel reachable", cfErr,
+					fmt.Sprintf("run: zt down %s && zt up %s %d", t.Name, t.Name, t.Port)) {
+					problems++
 				}
-				if id == "" {
-					return fmt.Errorf("tunnel %q not found in Cloudflare account", t.Name)
+			} else {
+				switch cfStatus {
+				case "active", "healthy":
+					fmt.Printf("  %s  Cloudflare tunnel status: %s\n", pass("✓"), cfStatus)
+				case "degraded":
+					fmt.Printf("  %s  Cloudflare tunnel status: %s — some edge connections lost\n", warn("!"), cfStatus)
+					if t.Protocol == state.ProtocolHTTP2 {
+						// already on TCP — suggest reconnect
+						fmt.Printf("     %s already using TCP, try reconnecting: zt down %s && zt up %s %d --tcp\n",
+							dim("hint:"), t.Name, t.Name, t.Port)
+					} else {
+						// suggest switching to TCP
+						fmt.Printf("     %s QUIC may be blocked, try: zt down %s && zt up %s %d --tcp\n",
+							dim("hint:"), t.Name, t.Name, t.Port)
+					}
+					problems++
+				default:
+					fmt.Printf("  %s  Cloudflare tunnel status: %s\n", fail("✗"), cfStatus)
+					fmt.Printf("     %s run: zt down %s && zt up %s %d\n", dim("hint:"), t.Name, t.Name, t.Port)
+					problems++
 				}
-				if id != t.TunnelID {
-					return fmt.Errorf("tunnel ID mismatch: local=%s CF=%s", t.TunnelID, id)
-				}
-				return nil
-			}()
-			if !check("Cloudflare tunnel exists", cfTunnelErr,
-				fmt.Sprintf("run: zt down %s && zt up %s %d", t.Name, t.Name, t.Port)) {
-				problems++
 			}
 
 			// port is warn-only — local service might be intentionally down

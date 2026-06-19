@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"time"
-	"os"
 
 	"github.com/casablanque-code/cfzt/config"
 	"github.com/casablanque-code/cfzt/internal/cloudflare"

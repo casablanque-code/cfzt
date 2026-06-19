@@ -12,7 +12,7 @@ func Restart(name string) error {
 	return fmt.Errorf("service restart is not supported on Windows")
 }
 
-func Uninstall(name string) error    { return nil }
-func UnitPath(name string) string    { return "" }
-func IsInstalled(name string) bool   { return false }
-func LingerEnabled() bool            { return false }
+func Uninstall(name string) error  { return nil }
+func UnitPath(name string) string  { return "" }
+func IsInstalled(name string) bool { return false }
+func LingerEnabled() bool          { return false }

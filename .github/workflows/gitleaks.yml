@@ -3,8 +3,18 @@ name: Security Scan (Gitleaks)
 on:
   push:
     branches: [ main, master ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/**'
   pull_request:
     branches: [ main, master ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/**'
 
 jobs:
   gitleaks:
@@ -13,9 +23,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # КРИТИЧЕСКИ ВАЖНО: берем всю историю коммитов, а не только последний
+          fetch-depth: 0 # CRITICAL: take all commits history, not the last
 
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Нужно, чтобы писать комменты к PR, если найдет секрет
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

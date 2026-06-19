@@ -19,7 +19,9 @@ var rootCmd = &cobra.Command{
   zt list                      list active tunnels
   zt status <name>             show tunnel details
   zt logs <name>               show cloudflared logs
-  zt doctor                    check system and tunnel health`,
+  zt doctor                    check system and tunnel health
+  zt export [-o zt.yaml]       export managed tunnels to a portable manifest
+  zt apply <file>              apply a zt.yaml manifest on this machine`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
@@ -33,6 +35,8 @@ func main() {
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(exportCmd)
+	rootCmd.AddCommand(applyCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)

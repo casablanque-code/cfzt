@@ -15,3 +15,12 @@ func IsActive(name string) bool {
 	}
 	return strings.TrimSpace(string(out)) == "active"
 }
+
+// WatchdogIsActive returns true if the zt-watchdog systemd unit is active.
+func WatchdogIsActive() bool {
+	out, err := exec.Command("systemctl", "--user", "is-active", "zt-watchdog.service").Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "active"
+}

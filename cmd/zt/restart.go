@@ -20,6 +20,22 @@ var restartCmd = &cobra.Command{
 func runRestart(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
+	boldFmt := color.New(color.Bold).SprintFunc()
+	fmt.Printf("\n%s\n\n", boldFmt("⚡ Restarting "+name))
+
+	if err := restartTunnel(name); err != nil {
+		return err
+	}
+
+	fmt.Println()
+	return nil
+}
+
+// restartTunnel restarts a tunnel's cloudflared process via whichever
+// mechanism manages it (systemd/launchd service, or direct PID).
+// Shared between `zt restart` and the watchdog so both restart tunnels
+// identically.
+func restartTunnel(name string) error {
 	store, err := state.LoadStore()
 	if err != nil {
 		return err
@@ -31,9 +47,6 @@ func runRestart(cmd *cobra.Command, args []string) error {
 	}
 
 	okFn := color.New(color.FgGreen).SprintFunc()
-	boldFmt := color.New(color.Bold).SprintFunc()
-
-	fmt.Printf("\n%s\n\n", boldFmt("⚡ Restarting "+name))
 
 	if service.IsInstalled(name) {
 		fmt.Printf("  → systemctl --user restart zt-%s\n", name)
@@ -65,6 +78,5 @@ func runRestart(cmd *cobra.Command, args []string) error {
 			name, name, name)
 	}
 
-	fmt.Println()
 	return nil
 }

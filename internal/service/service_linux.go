@@ -27,6 +27,24 @@ StandardError=append:%s
 WantedBy=default.target
 `
 
+const watchdogUnitName = "zt-watchdog.service"
+
+const watchdogUnitTemplate = `[Unit]
+Description=zt QUIC/HTTP2 fallback watchdog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=%s watchdog run
+Restart=on-failure
+RestartSec=10s
+StandardOutput=append:%s
+StandardError=append:%s
+
+[Install]
+WantedBy=default.target
+`
+
 func unitName(name string) string {
 	return "zt-" + name + ".service"
 }
@@ -41,6 +59,18 @@ func unitPath(name string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, unitName(name)), nil
+}
+
+func watchdogUnitPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, ".config", "systemd", "user")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, watchdogUnitName), nil
 }
 
 func cloudflaredBin() (string, error) {
@@ -165,4 +195,71 @@ func LingerEnabled() bool {
 		return false
 	}
 	return strings.TrimSpace(string(out)) == "Linger=yes"
+}
+
+// InstallWatchdog creates and starts the zt-watchdog systemd user unit,
+// which runs `zt watchdog run` in the background to mitigate the
+// cloudflared QUIC→HTTP2 fallback bug. logPath is where the watchdog's
+// own stdout/stderr is appended (separate from any tunnel's log).
+func InstallWatchdog(logPath string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not determine zt binary path: %w", err)
+	}
+
+	if err := ensureLinger(); err != nil {
+		fmt.Printf("     ! linger not enabled: %v\n", err)
+	}
+
+	unit := fmt.Sprintf(watchdogUnitTemplate, exe, logPath, logPath)
+
+	path, err := watchdogUnitPath()
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte(unit), 0644); err != nil {
+		return fmt.Errorf("failed to write watchdog unit file: %w", err)
+	}
+
+	cmds := [][]string{
+		{"systemctl", "--user", "daemon-reload"},
+		{"systemctl", "--user", "enable", "--now", watchdogUnitName},
+	}
+	for _, args := range cmds {
+		out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("systemctl %s: %w\n%s", strings.Join(args[1:], " "), err, out)
+		}
+	}
+	return nil
+}
+
+// UninstallWatchdog stops, disables, and removes the zt-watchdog unit.
+func UninstallWatchdog() error {
+	cmds := [][]string{
+		{"systemctl", "--user", "disable", "--now", watchdogUnitName},
+		{"systemctl", "--user", "daemon-reload"},
+	}
+	for _, args := range cmds {
+		_ = exec.Command(args[0], args[1:]...).Run()
+	}
+
+	path, err := watchdogUnitPath()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove watchdog unit file: %w", err)
+	}
+	return nil
+}
+
+// WatchdogIsInstalled returns true if the watchdog unit file exists.
+func WatchdogIsInstalled() bool {
+	path, err := watchdogUnitPath()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
+	return err == nil
 }

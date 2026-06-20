@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-20
+
+### Added
+- `zt watchdog enable` / `disable` / `status` — background service that automatically recovers tunnels stuck on the HTTP/2 fallback after a transient UDP/QUIC blip (cloudflared never retries QUIC on its own — see [cloudflare/cloudflared#1534](https://github.com/cloudflare/cloudflared/issues/1534))
+- `internal/watchdog` package — incremental log tailing, exponential backoff per tunnel (10min → 60min cap), separate runtime state file (`~/.zt-watchdog-state.json`) to avoid contending with interactive commands
+- `cloudflared.LogPath()` helper
+- `zt doctor` now reports watchdog status
+- 14 tests covering incremental log scanning, backoff math, and runtime state corruption recovery
+
+### Changed
+- `restartTunnel(name)` extracted from `zt restart` so the watchdog reuses identical restart logic
+- Only tunnels with `protocol: auto` (the default) are watched — tunnels pinned via `--protocol`/`--tcp` are left untouched, as that's a deliberate user choice
+
 ## [0.3.0] - 2026-06-19
 
 ### Added

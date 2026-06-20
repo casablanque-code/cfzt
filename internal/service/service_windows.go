@@ -16,3 +16,10 @@ func Uninstall(name string) error  { return nil }
 func UnitPath(name string) string  { return "" }
 func IsInstalled(name string) bool { return false }
 func LingerEnabled() bool          { return false }
+
+func InstallWatchdog(logPath string) error {
+	return fmt.Errorf("watchdog is not supported on Windows — run `zt watchdog run` manually if needed")
+}
+func UninstallWatchdog() error  { return nil }
+func WatchdogIsInstalled() bool { return false }
+func WatchdogIsActive() bool    { return false }

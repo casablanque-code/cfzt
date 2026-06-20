@@ -116,6 +116,18 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  %s  systemd linger enabled\n", pass("✓"))
 	}
 
+	// 2b. Watchdog
+	if !service.WatchdogIsInstalled() {
+		fmt.Printf("  %s  QUIC/HTTP2 fallback watchdog not enabled\n", dim("–"))
+		fmt.Printf("     %s run: zt watchdog enable\n", dim("hint:"))
+	} else if !service.WatchdogIsActive() {
+		fmt.Printf("  %s  watchdog installed but not running\n", warn("!"))
+		fmt.Printf("     %s run: zt watchdog enable\n", dim("hint:"))
+		problems++
+	} else {
+		fmt.Printf("  %s  QUIC/HTTP2 fallback watchdog running\n", pass("✓"))
+	}
+
 	// 3. Config exists
 	fmt.Println()
 	fmt.Printf("  %s\n", boldFmt("Cloudflare"))

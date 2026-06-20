@@ -62,6 +62,15 @@ func ConfigPath(tunnelName string) (string, error) {
 	return filepath.Join(dir, "config.yml"), nil
 }
 
+// LogPath returns the path to the cloudflared.log for a tunnel.
+func LogPath(tunnelName string) (string, error) {
+	dir, err := tunnelDir(tunnelName)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "cloudflared.log"), nil
+}
+
 func tunnelDir(name string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

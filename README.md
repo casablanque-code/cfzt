@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/casablanque-code/cfzt/actions/workflows/ci.yml/badge.svg)](https://github.com/casablanque-code/cfzt/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/casablanque-code/cfzt)](https://goreportcard.com/report/github.com/casablanque-code/cfzt)
+[![Tiny Tool Town](https://img.shields.io/badge/featured-TinyToolTown-blue)](https://www.tinytooltown.com/tools/cfzt/)
 
 One command to expose a local service through Cloudflare Zero Trust.
 

@@ -35,4 +35,3 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          args: --disable-all --enable=govet,ineffassign,staticcheck,unused

@@ -27,12 +27,22 @@ jobs:
         run: |
           PR="${{ github.event.pull_request.number }}"
 
-          # Wait for CI checks to complete
+          # Right after opened/synchronize, checks may not exist yet.
+          # Poll until at least one check shows up, or give up after ~2 min.
+          for i in $(seq 1 12); do
+            COUNT=$(gh pr checks "$PR" --json name 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+            if [ "$COUNT" -gt 0 ]; then
+              break
+            fi
+            sleep 10
+          done
+
+          # Now actually wait for them to finish
           gh pr checks "$PR" --watch --interval 10 --timeout 5m || true
 
           # Consider CI green only if every check concluded successfully
-          FAILED=$(gh pr checks "$PR" --json name,conclusion \
-            --jq '[.[] | select(.conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED")] | length')
+          FAILED=$(gh pr checks "$PR" --json name,conclusion 2>/dev/null \
+            --jq '[.[] | select(.conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED")] | length' || echo 1)
 
           if [ "$FAILED" -eq 0 ]; then
             echo "✅ CI passed! Auto-merging patch/minor update..."

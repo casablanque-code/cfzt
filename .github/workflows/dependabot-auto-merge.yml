@@ -52,6 +52,7 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
 
       # Approve patch/minor updates (only if we're auto-merging)
       - name: Approve patch/minor updates
@@ -62,6 +63,7 @@ jobs:
           gh pr review --approve "${{ github.event.pull_request.number }}" -b "Auto-approved by dependabot workflow"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
 
       # For major updates: add a label and comment to review manually
       - name: Flag major updates for manual review
@@ -72,3 +74,4 @@ jobs:
           gh pr label add "${{ github.event.pull_request.number }}" --label "dependencies,manual-review-required"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}

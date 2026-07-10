@@ -6,9 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    name: Build & Lint
+    name: Build, Vet, Test & Lint
     runs-on: ubuntu-latest
 
     steps:
@@ -21,6 +24,12 @@ jobs:
 
       - name: Build
         run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -race -cover
 
       - name: Lint
         uses: golangci/golangci-lint-action@v6

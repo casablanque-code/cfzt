@@ -1,0 +1,64 @@
+name: Dependabot Auto-Merge
+
+on: pull_request_target
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+
+    steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      # Auto-merge only for patch/minor updates AND if CI passes.
+      # Major updates are intentionally excluded - they need a human look.
+      - name: Auto-merge patch/minor updates (if CI passes)
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: |
+          PR="${{ github.event.pull_request.number }}"
+
+          # Wait for CI checks to complete
+          gh pr checks "$PR" --watch --interval 10 --timeout 5m || true
+
+          # Consider CI green only if every check concluded successfully
+          FAILED=$(gh pr checks "$PR" --json name,conclusion \
+            --jq '[.[] | select(.conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED")] | length')
+
+          if [ "$FAILED" -eq 0 ]; then
+            echo "✅ CI passed! Auto-merging patch/minor update..."
+            gh pr merge --auto --squash "$PR"
+          else
+            echo "❌ CI failed or incomplete. Skipping auto-merge for safety."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Approve patch/minor updates (only if we're auto-merging)
+      - name: Approve patch/minor updates
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: |
+          gh pr review --approve "${{ github.event.pull_request.number }}" -b "Auto-approved by dependabot workflow"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # For major updates: add a label and comment to review manually
+      - name: Flag major updates for manual review
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-major'
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --body "⚠️ This is a **major** update. Please review manually before merging."
+          gh pr label add "${{ github.event.pull_request.number }}" --label "dependencies,manual-review-required"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -8,8 +8,9 @@ updates:
     open-pull-requests-limit: 5
     groups:
       go-dependencies:
-        patterns:
-          - "*"
+        update-types:
+          - "patch"
+          - "minor"
     commit-message:
       prefix: "chore(deps)"
 
@@ -17,3 +18,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        update-types:
+          - "patch"
+          - "minor"

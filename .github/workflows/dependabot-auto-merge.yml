@@ -71,7 +71,7 @@ jobs:
           steps.metadata.outputs.update-type == 'version-update:semver-major'
         run: |
           gh pr comment "${{ github.event.pull_request.number }}" --body "⚠️ This is a **major** update. Please review manually before merging."
-          gh pr label add "${{ github.event.pull_request.number }}" --label "dependencies,manual-review-required"
+          gh pr edit "${{ github.event.pull_request.number }}" --add-label "dependencies,manual-review-required"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}

@@ -324,9 +324,53 @@ zt doctor
 
 ### `zt status`
 
-| Flag | Description |
-|---|---|
-| `--logs` | Show recent log output inline |
+| Flag     | Description                    |
+| -------- | ------------------------------- |
+| `--logs` | Show recent log output inline   |
+
+`zt status <name>` and `zt <name> status` are equivalent — same for `logs`, `restart`, and `down`.
+
+---
+
+## Shell completion
+
+[#shell-completion](#shell-completion)
+
+`zt` uses [Cobra](https://github.com/spf13/cobra), which ships tab-completion out of the box:
+
+```
+# bash (current shell)
+source <(zt completion bash)
+
+# bash (persist)
+zt completion bash | sudo tee /etc/bash_completion.d/zt
+
+# zsh
+zt completion zsh > "${fpath[1]}/_zt"
+
+# fish
+zt completion fish > ~/.config/fish/completions/zt.fish
+```
+
+Run `zt completion --help` for details per shell.
+
+---
+
+## Version
+
+[#version](#version)
+
+```
+zt --version
+```
+
+There is currently no `zt update` command — `zt` is a single static binary with no
+auto-updater. To upgrade, re-run the install script or `go install` (see
+[Install](#install)), which simply overwrites the existing binary in place:
+
+```
+curl -fsSL https://raw.githubusercontent.com/casablanque-code/cfzt/main/install.sh | bash
+```
 
 ---
 

@@ -1,8 +1,10 @@
 # zt — Zero Trust tunnel manager
 
 [![CI](https://github.com/casablanque-code/cfzt/actions/workflows/ci.yml/badge.svg)](https://github.com/casablanque-code/cfzt/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/casablanque-code/cfzt)](https://goreportcard.com/report/github.com/casablanque-code/cfzt)
+[![Go Reference](https://pkg.go.dev/badge/github.com/casablanque-code/cfzt.svg)](https://pkg.go.dev/github.com/casablanque-code/cfzt)
+[![Gitleaks](https://img.shields.io/badge/protected%20by-gitleaks-blue)](https://github.com/casablanque-code/cfzt/actions/workflows/gitleaks.yml)
 [![Tiny Tool Town](https://img.shields.io/badge/featured-TinyToolTown-blue)](https://www.tinytooltown.com/tools/cfzt/)
+[![Release](https://img.shields.io/github/v/release/casablanque-code/cfzt)](https://github.com/casablanque-code/cfzt/releases/latest)
 
 One command to expose a local service through Cloudflare Zero Trust.
 

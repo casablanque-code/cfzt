@@ -364,6 +364,19 @@ curl http://localhost:<port>
 zt logs <name>
 ```
 
+**`502 Bad Gateway` even though `zt status` shows the QUIC connection is up**
+`zt status` reflects what cloudflared's connectivity pre-check and connection
+registration reported - but that pre-check only opens a small test UDP
+connection, not real traffic. On some networks the pre-check passes (QUIC
+control packets get through fine) while actual response data gets silently
+dropped due to UDP fragmentation/MTU issues on the path, causing request
+timeouts that surface as 502s. This is not something `zt` or the watchdog
+can detect or fix automatically - if you're seeing 502s with an apparently
+healthy QUIC connection, force TCP:
+```bash
+zt down <name> && zt up <name> <port> --tcp
+```
+
 **Tunnel shows `stopped` in `zt ls`**
 ```bash
 systemctl --user status zt-<name>

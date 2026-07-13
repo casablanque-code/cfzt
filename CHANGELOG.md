@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-14
+
+### Added
+
+- `zt status <name>` now shows the live-negotiated protocol for `auto` tunnels (`auto (http2)` / `auto (quic)`) instead of a static `auto`, via `cloudflared.DetectEffectiveProtocol()` tailing `cloudflared.log` for connection registration and startup connectivity pre-check markers
+- `--version` flag
+- `zt <name> status` / `logs` / `restart` / `down` now work identically to `zt status` / `logs` / `restart` / `down` `<name>`
+- `zt completion bash|zsh|fish|powershell` documented in README (was already available via Cobra, just undocumented)
+- README: troubleshooting entry for `502 Bad Gateway` despite an apparently healthy QUIC connection (UDP MTU/fragmentation dropping real traffic while the pre-check's small test connection still passes) — fix is `--tcp`, not automatically detectable
+- README: documented that there is no `zt update` — reinstalling via `install.sh`/`go install` overwrites the binary in place
+
+### Fixed
+
+- `--version` / `-v` were silently non-functional: the Makefile's `-ldflags -X main.version=...` targeted a `main.version` symbol that didn't exist in the code, so the linker dropped it without error
+- root `--help` didn't surface `--tcp` or shell completion, even though both existed — only visible via `zt up --help` / by knowing to look
+
+### Tests
+
+- 4 tests for `DetectEffectiveProtocol`, including a fixture mirroring a real degraded-QUIC pre-check log
+- 8 tests for the name-first argument reordering (`zt <name> status`, flag passthrough, aliases, no-ops)
+
 ## [0.4.0] - 2026-06-20
 
 ### Added

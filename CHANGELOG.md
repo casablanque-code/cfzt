@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-07-14
+
+### Added
+
+- `zt doctor`: platform-aware `cloudflared` upgrade hint — detects Homebrew (macOS) or apt (Linux, via `dpkg -S`) ownership of the `cloudflared` binary and prints the matching upgrade command (`brew upgrade cloudflared` / `sudo apt update && sudo apt install --only-upgrade cloudflared`) instead of a bare downloads link
+- README: new "Installing cloudflared" section — per-platform install/upgrade table (Homebrew, apt, generic binary, Windows), replacing the single generic link in Prerequisites
+
+### Docs
+
+- Noted that Windows support in `zt` itself is currently partial (see `internal/service` / `internal/cloudflared` `_windows.go` stubs — process lifecycle management not yet implemented)
+
 ## [0.5.0] - 2026-07-14
 
 ### Added

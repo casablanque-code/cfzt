@@ -32,11 +32,28 @@ zt up portainer --docker --allow you@example.com
 ## Prerequisites
 
 - A domain on Cloudflare
-- [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) ≥ 2023.x installed and in PATH
+- [`cloudflared`](#installing-cloudflared) ≥ 2023.x installed and in PATH
 - A Cloudflare API token with the following permissions:
   - `Account / Cloudflare Tunnel / Edit`
   - `Zone / DNS / Edit`
   - `Account / Access: Apps and Policies / Edit`
+
+### Installing cloudflared
+
+`zt` drives `cloudflared` but doesn't install or manage it — use your platform's
+package manager so future upgrades are a normal `upgrade`/`update`, not a manual
+re-download:
+
+| Platform | Install | Upgrade |
+|---|---|---|
+| macOS (Homebrew) | `brew install cloudflared` | `brew upgrade cloudflared` |
+| Debian/Ubuntu (apt) | see [Cloudflare's apt repo setup](https://pkg.cloudflare.com/index.html#debian-any) | `sudo apt update && sudo apt install --only-upgrade cloudflared` |
+| Other Linux / binary | [Releases](https://github.com/cloudflare/cloudflared/releases) | re-download and replace the binary |
+| Windows | [Releases](https://github.com/cloudflare/cloudflared/releases) | re-download and replace the binary (note: `zt` itself only has partial Windows support currently) |
+
+`zt doctor` checks the installed version and, if it's outdated, prints the
+right upgrade command for how it detects `cloudflared` was installed
+(Homebrew/apt) or falls back to the releases link otherwise.
 
 ### Creating the API token
 

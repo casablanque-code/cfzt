@@ -101,8 +101,12 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		if ver, verErr := cloudflared.GetVersion(); verErr == nil && ver.TooOld() {
 			fmt.Printf("  %s  cloudflared version %s is too old (minimum: %d.x)\n",
 				warn("!"), ver, cloudflared.MinYear())
-			fmt.Printf("     %s upgrade: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/\n",
-				dim("hint:"))
+			if upCmd, ok := cloudflared.UpgradeCommand(cloudflared.DetectInstallMethod()); ok {
+				fmt.Printf("     %s upgrade: %s\n", dim("hint:"), upCmd)
+			} else {
+				fmt.Printf("     %s upgrade: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/\n",
+					dim("hint:"))
+			}
 			problems++
 		}
 	}

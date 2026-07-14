@@ -6,8 +6,8 @@ Only the latest release receives security fixes.
 
 | Version | Supported |
 |---------|-----------|
-| 0.3.x   | ✅        |
-| < 0.3   | ❌        |
+| 0.5.x   | ✅        |
+| < 0.4   | ❌        |
 
 ## Reporting a Vulnerability
 

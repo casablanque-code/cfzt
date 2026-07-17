@@ -21,6 +21,7 @@ type Client struct {
 	AccountID string
 	apiToken  string
 	http      *http.Client
+	baseURL   string // overridable for tests; defaults to the real API
 }
 
 func NewClient(apiToken, accountID string) *Client {
@@ -28,11 +29,20 @@ func NewClient(apiToken, accountID string) *Client {
 		AccountID: accountID,
 		apiToken:  apiToken,
 		http:      &http.Client{Timeout: 30 * time.Second},
+		baseURL:   baseURL,
 	}
 }
 
+// NewClientForTesting returns a Client pointed at an arbitrary base URL
+// (e.g. an httptest.Server) instead of the real Cloudflare API.
+func NewClientForTesting(apiToken, accountID, testBaseURL string) *Client {
+	c := NewClient(apiToken, accountID)
+	c.baseURL = testBaseURL
+	return c
+}
+
 func (c *Client) do(method, path string, body io.Reader) (*http.Response, error) {
-	url := baseURL + path
+	url := c.baseURL + path
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err

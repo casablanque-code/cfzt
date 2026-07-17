@@ -66,12 +66,12 @@ func TestUpsertCNAME_DeletesExistingFirst(t *testing.T) {
 	var calls []string
 	c, _ := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		calls = append(calls, r.Method+" "+r.URL.Path)
-		switch {
-		case r.Method == "GET":
+		switch r.Method {
+		case "GET":
 			jsonHandler(200, `{"result":[{"id":"old-rec","type":"CNAME","name":"app.example.com","content":"old.cfargotunnel.com"}],"success":true,"errors":[]}`)(w, r)
-		case r.Method == "DELETE":
+		case "DELETE":
 			jsonHandler(200, `{"success":true,"errors":[]}`)(w, r)
-		case r.Method == "POST":
+		case "POST":
 			jsonHandler(200, `{"result":{"id":"new-rec"},"success":true,"errors":[]}`)(w, r)
 		}
 	})

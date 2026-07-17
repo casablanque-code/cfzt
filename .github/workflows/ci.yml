@@ -45,3 +45,10 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
+
+      - name: Test with coverage
+        run: go test ./... -race -coverprofile=coverage.out
+
+      - uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out

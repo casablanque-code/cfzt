@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-07-17
+
+### Added
+
+- Windows: core tunnel lifecycle now works — `zt up`/`down`/`restart`/`status`/`logs`/`doctor` run cloudflared in PID-tracked mode (the same fallback mode Linux/macOS use without systemd/launchd). `zt up` reports `(no auto-restart)` explicitly when running this way.
+- README: "Windows support" section documenting what works and what doesn't yet (no persistent service, no `zt watchdog` on Windows)
+- README: "Installing `zt` on Windows" — PowerShell installer that downloads the latest release, verifies its sha256, and adds it to user `PATH` via `[Environment]::SetEnvironmentVariable` (not `setx`, which silently truncates PATH past 1024 characters)
+
+### Fixed
+
+- `cloudflared --version` detection now works on Windows (`zt doctor` previously always reported `unknown` — the Windows codepath was a hardcoded stub even though the underlying logic was already platform-agnostic)
+- `.gitignore`: `dist/` build artifacts and `*.patch` files no longer show up as untracked/dirty in `git status`
+
+### Changed
+
+- `golang.org/x/sys` moved from an indirect to a direct dependency in `go.mod` (now imported directly for Windows process management)
+
 ## [0.5.1] - 2026-07-14
 
 ### Added

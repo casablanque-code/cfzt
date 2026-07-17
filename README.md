@@ -49,7 +49,7 @@ re-download:
 | macOS (Homebrew) | `brew install cloudflared` | `brew upgrade cloudflared` |
 | Debian/Ubuntu (apt) | see [Cloudflare's apt repo setup](https://pkg.cloudflare.com/index.html#debian-any) | `sudo apt update && sudo apt install --only-upgrade cloudflared` |
 | Other Linux / binary | [Releases](https://github.com/cloudflare/cloudflared/releases) | re-download and replace the binary |
-| Windows | [Releases](https://github.com/cloudflare/cloudflared/releases) | re-download and replace the binary (note: `zt` itself only has partial Windows support currently) |
+| Windows | [Releases](https://github.com/cloudflare/cloudflared/releases) | re-download and replace the binary — see [Windows support](#windows-support) |
 
 `zt doctor` checks the installed version and, if it's outdated, prints the
 right upgrade command for how it detects `cloudflared` was installed
@@ -390,6 +390,26 @@ auto-updater. To upgrade, re-run the install script or `go install` (see
 ```
 curl -fsSL https://raw.githubusercontent.com/casablanque-code/cfzt/main/install.sh | bash
 ```
+
+---
+
+## Windows support
+
+[#windows-support](#windows-support)
+
+`zt up`/`down`/`restart`/`status`/`logs`/`doctor` work on Windows — cloudflared
+runs directly as a tracked process (PID mode), same fallback mode Linux/macOS
+use when systemd/launchd aren't available.
+
+**Not yet implemented on Windows:**
+
+- No persistent service — cloudflared won't survive a reboot or auto-restart
+  after a crash. `zt up` will tell you this explicitly (`(no auto-restart)`)
+  when it happens.
+- `zt watchdog` is unavailable.
+
+A proper Windows Service (via Task Scheduler or the SCM) for both of these is
+planned but not done yet.
 
 ---
 

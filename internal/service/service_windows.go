@@ -4,8 +4,12 @@ package service
 
 import "fmt"
 
+// Install always fails on Windows — there's no systemd/launchd-equivalent
+// service integration yet, so callers (zt up, zt restart) fall back to
+// PID-tracked mode automatically, same as they would if systemd/launchd
+// were simply unavailable on Linux/macOS. See runner_windows.go.
 func Install(name, configPath, logPath string) error {
-	return fmt.Errorf("systemd/launchd integration is not supported on Windows\n  run cloudflared manually: cloudflared tunnel --config %s run", configPath)
+	return fmt.Errorf("no service manager integration on Windows yet — running in PID mode (no auto-restart on crash, no start-on-boot)")
 }
 
 func Restart(name string) error {

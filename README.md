@@ -94,6 +94,62 @@ sudo mv zt /usr/local/bin/
 
 Download from [Releases](https://github.com/casablanque-code/cfzt/releases) and place in your PATH. Each release includes `.sha256` checksum files and a combined `checksums.txt`.
 
+### Option E — Windows (PowerShell)
+
+See [Windows support](#windows-support) for what currently works — this
+installs the binary and adds it to your user `PATH` safely:
+
+```powershell
+$dest = "$env:LOCALAPPDATA\zt"
+New-Item -ItemType Directory -Force -Path $dest | Out-Null
+
+$exe = "$dest\zt.exe"
+Invoke-WebRequest "https://github.com/casablanque-code/cfzt/releases/latest/download/zt-windows-amd64.exe" -OutFile $exe
+Invoke-WebRequest "https://github.com/casablanque-code/cfzt/releases/latest/download/zt-windows-amd64.exe.sha256" -OutFile "$exe.sha256"
+
+$expected = (Get-Content "$exe.sha256").Split(" ")[0]
+$actual = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+if ($expected -ne $actual) { throw "checksum mismatch — do not run this binary" }
+
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($userPath -notlike "*$dest*") {
+    [Environment]::SetEnvironmentVariable("Path", "$userPath;$dest", "User")
+}
+
+Write-Host "Installed. Open a new terminal and run: zt init"
+```
+
+`zt.exe` is a console app — double-clicking it in Explorer will show a
+"you need to open cmd.exe" prompt. That's expected; always run it from a
+terminal (cmd, PowerShell, Windows Terminal).
+
+**Don't use `setx PATH ...` to add it to PATH by hand** — `setx` truncates
+anything over 1024 characters *silently*, and on a dev machine with a few
+toolchains already installed your PATH is almost certainly already longer
+than that. It will corrupt your PATH rather than append to it. The script
+above uses `[Environment]::SetEnvironmentVariable`, which doesn't have that
+limit — but if your PATH still looks wrong afterwards (check with
+`echo %PATH%` in a **new** cmd window — env var changes don't apply to
+already-open terminals), fix it via the GUI instead: `Win`+`R` → `sysdm.cpl`
+→ **Advanced** → **Environment Variables**, rather than any more `setx`.
+
+---
+
+## Windows support
+
+`zt up`/`down`/`restart`/`status`/`logs`/`doctor` work on Windows — cloudflared
+runs directly as a tracked process (PID mode), same fallback mode Linux/macOS
+use when systemd/launchd aren't available.
+
+**Not yet implemented on Windows:**
+
+- No persistent service — cloudflared won't survive a reboot or auto-restart
+  after a crash. `zt up` will tell you this explicitly (`(no auto-restart)`)
+  when it happens.
+- `zt watchdog` is unavailable.
+
+(Windows install instructions are in [Install → Option E](#option-e--windows-powershell) above.)
+
 ---
 
 ## Setup
@@ -354,8 +410,6 @@ zt doctor
 
 ## Shell completion
 
-[#shell-completion](#shell-completion)
-
 `zt` uses [Cobra](https://github.com/spf13/cobra), which ships tab-completion out of the box:
 
 ```
@@ -378,8 +432,6 @@ Run `zt completion --help` for details per shell.
 
 ## Version
 
-[#version](#version)
-
 ```
 zt --version
 ```
@@ -391,62 +443,6 @@ auto-updater. To upgrade, re-run the install script or `go install` (see
 ```
 curl -fsSL https://raw.githubusercontent.com/casablanque-code/cfzt/main/install.sh | bash
 ```
-
----
-
-## Windows support
-
-[#windows-support](#windows-support)
-
-`zt up`/`down`/`restart`/`status`/`logs`/`doctor` work on Windows — cloudflared
-runs directly as a tracked process (PID mode), same fallback mode Linux/macOS
-use when systemd/launchd aren't available.
-
-**Not yet implemented on Windows:**
-
-- No persistent service — cloudflared won't survive a reboot or auto-restart
-  after a crash. `zt up` will tell you this explicitly (`(no auto-restart)`)
-  when it happens.
-- `zt watchdog` is unavailable.
-
-### Installing `zt` on Windows
-
-**PowerShell (recommended)** — downloads the latest release, verifies its
-checksum, and adds it to your user `PATH` safely:
-
-```powershell
-$dest = "$env:LOCALAPPDATA\zt"
-New-Item -ItemType Directory -Force -Path $dest | Out-Null
-
-$exe = "$dest\zt.exe"
-Invoke-WebRequest "https://github.com/casablanque-code/cfzt/releases/latest/download/zt-windows-amd64.exe" -OutFile $exe
-Invoke-WebRequest "https://github.com/casablanque-code/cfzt/releases/latest/download/zt-windows-amd64.exe.sha256" -OutFile "$exe.sha256"
-
-$expected = (Get-Content "$exe.sha256").Split(" ")[0]
-$actual = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
-if ($expected -ne $actual) { throw "checksum mismatch — do not run this binary" }
-
-$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($userPath -notlike "*$dest*") {
-    [Environment]::SetEnvironmentVariable("Path", "$userPath;$dest", "User")
-}
-
-Write-Host "Installed. Open a new terminal and run: zt init"
-```
-
-`zt.exe` is a console app — double-clicking it in Explorer will show a
-"you need to open cmd.exe" prompt. That's expected; always run it from a
-terminal (cmd, PowerShell, Windows Terminal).
-
-**Don't use `setx PATH ...` to add it to PATH by hand** — `setx` truncates
-anything over 1024 characters *silently*, and on a dev machine with a few
-toolchains already installed your PATH is almost certainly already longer
-than that. It will corrupt your PATH rather than append to it. The script
-above uses `[Environment]::SetEnvironmentVariable`, which doesn't have that
-limit — but if your PATH still looks wrong afterwards (check with
-`echo %PATH%` in a **new** cmd window — env var changes don't apply to
-already-open terminals), fix it via the GUI instead: `Win`+`R` → `sysdm.cpl`
-→ **Advanced** → **Environment Variables**, rather than any more `setx`.
 
 ---
 

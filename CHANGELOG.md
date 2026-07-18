@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-07-18
+
+### Added
+
+- Test coverage: `internal/cloudflare` (0% → 79.9%), `internal/docker` (0% → 86.2%), `config` (0% → 79.3%), `internal/state/store.go` (0% → 84.8%), plus targeted tests for `cmd/zt`'s pure/orchestration logic (`tunnelStatus`, `protocolLabel`, `protocolForExport`, `runExport`, `runApply`'s diff logic, `resolveApplyPort`)
+
+### Fixed
+
+- `zt apply`: a Docker-flagged service with an explicit `port:` in the manifest no longer fails when Docker itself is unreachable — `resolveApplyPort()` now checks the explicit override before querying Docker, not after (previously it queried Docker unconditionally and only used the override if the query happened to succeed)
+- `internal/cloudflare`: `UpsertCNAME`/`UpsertAccessApp` upsert semantics (delete-existing-before-create) now covered by tests, catching any future regression in the `zt up` rollback path
+- README: removed dead `[#anchor](#anchor)` link stubs left over from earlier patches; Windows install instructions consolidated into `## Install` (were previously duplicated/split from `## Windows support`)
+
+### Changed
+
+- `internal/cloudflare.Client` gained an overridable `baseURL` (via `NewClientForTesting`) and `internal/docker`'s package-level `httpClient` is now swappable in tests — both internal-only, no change to public API
+
 ## [0.6.0] - 2026-07-17
 
 ### Added

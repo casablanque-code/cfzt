@@ -152,16 +152,17 @@ func runApply(cmd *cobra.Command, args []string) error {
 }
 
 // resolveApplyPort returns the port string for a service from the manifest.
-// For docker services it auto-detects from the running container.
+// For docker services it auto-detects from the running container, unless
+// an explicit port is also set in the manifest, in which case that takes
+// priority and Docker is never queried at all.
 func resolveApplyPort(name string, svc manifest.ServiceSpec) (string, error) {
 	if svc.Docker {
+		if svc.Port != 0 {
+			return strconv.Itoa(svc.Port), nil
+		}
 		detected, err := docker.FindContainerPort(name)
 		if err != nil {
 			return "", fmt.Errorf("docker port detection failed: %w", err)
-		}
-		if svc.Port != 0 {
-			// explicit port in manifest overrides docker detection
-			return strconv.Itoa(svc.Port), nil
 		}
 		return detected, nil
 	}

@@ -177,15 +177,15 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  %s\n", boldFmt("Tunnel: "+t.Name))
 			fmt.Println()
 
-			// process / systemd
+			// process / service manager
 			var procErr error
 			if service.IsInstalled(t.Name) {
 				if !service.IsActive(t.Name) {
-					procErr = fmt.Errorf("systemd service zt-%s is not active", t.Name)
+					procErr = fmt.Errorf("%s service for %s is not active", service.ManagerName(), t.Name)
 				}
-				label := fmt.Sprintf("systemd service zt-%s.service active", t.Name)
+				label := fmt.Sprintf("%s service (%s) active", service.ManagerName(), t.Name)
 				if !check(label, procErr,
-					fmt.Sprintf("run: systemctl --user start zt-%s", t.Name)) {
+					fmt.Sprintf("run: zt restart %s", t.Name)) {
 					problems++
 				}
 			} else if t.PID > 0 {

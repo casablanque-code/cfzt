@@ -52,7 +52,7 @@ func runDown(cmd *cobra.Command, args []string) error {
 		if err := service.Uninstall(name); err != nil {
 			fmt.Printf("     %s %v\n", warnFn("!"), err)
 		} else {
-			fmt.Printf("     %s zt-%s.service removed\n", okFn("✓"), name)
+			fmt.Printf("     %s %s service removed\n", okFn("✓"), service.ManagerName())
 		}
 	} else {
 		// fall back to killing direct process if service wasn't installed

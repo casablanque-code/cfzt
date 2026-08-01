@@ -189,14 +189,14 @@ func runLogs(cmd *cobra.Command, args []string) error {
 }
 
 // tunnelStatus resolves the real runtime status of a tunnel.
-// Priority: systemd > direct PID > stopped.
+// Priority: service manager (systemd/launchd/scheduled task) > direct PID > stopped.
 func tunnelStatus(t *state.Tunnel) (statusStr, managedBy string) {
 	green := color.New(color.FgGreen).SprintFunc()
 	red := color.New(color.FgRed).SprintFunc()
 	dim := color.New(color.FgHiBlack).SprintFunc()
 
 	if service.IsInstalled(t.Name) {
-		managedBy = "systemd"
+		managedBy = service.ManagerName()
 		if service.IsActive(t.Name) {
 			statusStr = green("running")
 		} else {

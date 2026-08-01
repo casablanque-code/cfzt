@@ -188,6 +188,16 @@ func IsInstalled(name string) bool {
 // separate "linger" toggle to check.
 func LingerEnabled() bool { return true }
 
+// Description returns a human-readable label for the installed service,
+// used in zt up's output instead of a systemd/launchd-shaped message.
+func Description(name string) string {
+	return fmt.Sprintf("%s scheduled task (auto-start at logon)", taskName(name))
+}
+
+// ManagerName returns a short label for the service manager in use, for
+// generic status/error messages that shouldn't hardcode "systemd".
+func ManagerName() string { return "scheduled task" }
+
 func InstallWatchdog(logPath string) error {
 	exe, err := os.Executable()
 	if err != nil {

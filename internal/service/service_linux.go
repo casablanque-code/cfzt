@@ -263,3 +263,13 @@ func WatchdogIsInstalled() bool {
 	_, err = os.Stat(path)
 	return err == nil
 }
+
+// Description returns a human-readable label for the installed service,
+// used in zt up's output.
+func Description(name string) string {
+	return fmt.Sprintf("%s (auto-start on boot)", unitName(name))
+}
+
+// ManagerName returns a short label for the service manager in use,
+// for generic status/error messages that shouldn't hardcode "systemd".
+func ManagerName() string { return "systemd" }

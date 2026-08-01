@@ -95,7 +95,16 @@ sudo mv zt /usr/local/bin/
 
 Download from [Releases](https://github.com/casablanque-code/cfzt/releases) and place in your PATH. Each release includes `.sha256` checksum files and a combined `checksums.txt`.
 
-### Option E — Windows (PowerShell)
+### Option E — Scoop (Windows)
+
+```powershell
+scoop bucket add cfzt https://github.com/casablanque-code/cfzt
+scoop install cfzt/zt
+```
+
+The bucket lives in this repo's [`bucket/`](bucket/) folder and updates itself automatically on every release. `scoop update zt` upgrades in place — no manual re-download or checksum verification needed, Scoop handles both.
+
+### Option F — Windows (PowerShell)
 
 See [Windows support](#windows-support) for what currently works — this
 installs the binary and adds it to your user `PATH` safely:
@@ -154,7 +163,7 @@ If `cloudflared` isn't on `PATH` (or task creation fails for any other
 reason), `zt up` falls back to running it as a directly tracked process —
 you'll see `(no auto-restart)` in the output when that happens.
 
-(Windows install instructions are in [Install → Option E](#option-e--windows-powershell) above.)
+(Windows install: [Scoop](#option-e--scoop-windows) (recommended, self-updating) or [PowerShell script](#option-f--windows-powershell) above. A winget package is planned — see the issue tracker for status.)
 
 ---
 

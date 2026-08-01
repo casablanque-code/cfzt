@@ -189,12 +189,46 @@ func IsInstalled(name string) bool {
 func LingerEnabled() bool { return true }
 
 func InstallWatchdog(logPath string) error {
-	return fmt.Errorf("watchdog is not supported on Windows yet — run `zt watchdog run` manually if needed")
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not determine zt binary path: %w", err)
+	}
+
+	inner := fmt.Sprintf(`"%s" watchdog run >> "%s" 2>&1`, exe, logPath)
+	xml := buildTaskXML("zt QUIC/HTTP2 fallback watchdog", "cmd.exe", "/c", inner)
+
+	return createTask(watchdogTaskName, xml)
 }
-func UninstallWatchdog() error { return nil }
+
+// UninstallWatchdog removes the watchdog task. Missing task is a no-op.
+func UninstallWatchdog() error {
+	if !taskExists(watchdogTaskName) {
+		return nil
+	}
+	out, err := exec.Command("schtasks", "/delete", "/tn", watchdogTaskName, "/f").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("schtasks /delete: %w\n%s", err, out)
+	}
+	return nil
+}
 
 // WatchdogIsInstalled returns true if the watchdog task exists.
 func WatchdogIsInstalled() bool {
 	return taskExists(watchdogTaskName)
 }
-func WatchdogIsActive() bool { return false }
+
+// taskIsRunning reports whether the named Task Scheduler task's last run
+// is currently in the "Running" state.
+func taskIsRunning(name string) bool {
+	out, err := exec.Command("schtasks", "/query", "/tn", name, "/fo", "list", "/v").Output()
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if after, ok := strings.CutPrefix(line, "Status:"); ok {
+			return strings.TrimSpace(after) == "Running"
+		}
+	}
+	return false
+}

@@ -3,12 +3,15 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/casablanque-code/cfzt/internal/testutil"
 )
 
 func TestLoad_NotFound(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.SetHome(t, t.TempDir())
 
 	_, err := Load()
 	if err == nil {
@@ -21,7 +24,7 @@ func TestLoad_NotFound(t *testing.T) {
 
 func TestLoad_Malformed(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.SetHome(t, home)
 
 	if err := os.WriteFile(filepath.Join(home, configFileName), []byte("{not json"), 0600); err != nil {
 		t.Fatal(err)
@@ -38,7 +41,7 @@ func TestLoad_Malformed(t *testing.T) {
 
 func TestLoad_Incomplete(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.SetHome(t, home)
 
 	// Valid JSON, but missing account_id and domain.
 	if err := os.WriteFile(filepath.Join(home, configFileName), []byte(`{"api_token":"tok"}`), 0600); err != nil {
@@ -55,7 +58,7 @@ func TestLoad_Incomplete(t *testing.T) {
 }
 
 func TestSaveThenLoad_RoundTrip(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.SetHome(t, t.TempDir())
 
 	want := &Config{APIToken: "tok-123", AccountID: "acct-456", Domain: "example.com"}
 	if err := Save(want); err != nil {
@@ -72,8 +75,11 @@ func TestSaveThenLoad_RoundTrip(t *testing.T) {
 }
 
 func TestSave_FilePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("NTFS has no owner/group/other permission bits — os.WriteFile's mode argument can only toggle the read-only attribute there, always reporting 0666/0444 regardless of what's passed")
+	}
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.SetHome(t, home)
 
 	cfg := &Config{APIToken: "tok", AccountID: "acct", Domain: "example.com"}
 	if err := Save(cfg); err != nil {
@@ -92,7 +98,7 @@ func TestSave_FilePermissions(t *testing.T) {
 
 func TestConfigFilePath_EndsWithFileName(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.SetHome(t, home)
 
 	got := ConfigFilePath()
 	want := filepath.Join(home, configFileName)

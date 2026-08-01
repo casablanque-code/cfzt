@@ -23,7 +23,8 @@ zt up portainer --docker --allow you@example.com
 2. Configures ingress rules
 3. Upserts a CNAME DNS record (replaces any conflicting record)
 4. Creates a Zero Trust Access application with an access policy
-5. Installs and starts a systemd (Linux) or LaunchAgent (macOS) service
+5. Installs and starts a systemd (Linux), LaunchAgent (macOS), or Task
+   Scheduler (Windows) service
 6. Saves state locally
 
 `zt down <name>` attempts to remove all created resources.
@@ -137,16 +138,21 @@ already-open terminals), fix it via the GUI instead: `Win`+`R` → `sysdm.cpl`
 
 ## Windows support
 
-`zt up`/`down`/`restart`/`status`/`logs`/`doctor` work on Windows — cloudflared
-runs directly as a tracked process (PID mode), same fallback mode Linux/macOS
-use when systemd/launchd aren't available.
+`zt up` installs a Task Scheduler task (`zt-<name>`, logon trigger,
+restart-on-failure) — the same auto-start/auto-restart guarantee
+systemd/launchd give on Linux/macOS, and `zt down`/`restart`/`status`/`logs`/
+`doctor` all work against it. `zt watchdog` is also available, running as its
+own `zt-watchdog` task.
 
-**Not yet implemented on Windows:**
+The task runs under your own logon session with no stored credentials, so
+`zt up` never needs admin rights or a password prompt — same permission
+model as `systemctl --user` / a per-user LaunchAgent. The trade-off is the
+same one those have too: it only starts once *you* log in, not at machine
+boot before any user session exists.
 
-- No persistent service — cloudflared won't survive a reboot or auto-restart
-  after a crash. `zt up` will tell you this explicitly (`(no auto-restart)`)
-  when it happens.
-- `zt watchdog` is unavailable.
+If `cloudflared` isn't on `PATH` (or task creation fails for any other
+reason), `zt up` falls back to running it as a directly tracked process —
+you'll see `(no auto-restart)` in the output when that happens.
 
 (Windows install instructions are in [Install → Option E](#option-e--windows-powershell) above.)
 
@@ -461,6 +467,8 @@ curl -fsSL https://raw.githubusercontent.com/casablanque-code/cfzt/main/install.
 
 ~/Library/LaunchAgents/
     com.zt.<name>.plist                # LaunchAgent (macOS)
+
+Task Scheduler > zt-<name>              # scheduled task (Windows, no on-disk file)
 ```
 
 ---
@@ -495,12 +503,18 @@ zt down <name> && zt up <name> <port> --tcp
 
 **Tunnel shows `stopped` in `zt ls`**
 ```bash
-systemctl --user status zt-<name>
+zt doctor
 zt logs <name>
+```
+Or check the service manager directly:
+```bash
+systemctl --user status zt-<name>      # Linux
+launchctl list com.zt.<name>           # macOS
+schtasks /query /tn zt-<name> /v       # Windows
 ```
 If the service crashed, restart it:
 ```bash
-systemctl --user restart zt-<name>
+zt restart <name>
 ```
 Or tear down and recreate:
 ```bash
@@ -518,6 +532,15 @@ The API token is missing `Account / Access: Apps and Policies / Edit`. Edit the 
 
 **DNS record conflict**
 `zt up` uses upsert — it removes any existing A, AAAA, or CNAME record with the same name before creating the tunnel CNAME. No manual cleanup needed.
+
+**Task doesn't start on Windows / `schtasks` shows the task but it's not running**
+The `zt-<name>` task only fires on logon to *your* account (see [Windows
+support](#windows-support)) — it won't start before you sign in, and it won't
+run under a different user's session. Sign in and check:
+```bash
+schtasks /query /tn zt-<name> /v
+zt logs <name>
+```
 
 **Run `zt doctor` first**
 Most issues are diagnosed automatically:

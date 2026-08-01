@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Windows: `zt up` now installs a real Task Scheduler service (`zt-<name>`, logon trigger, restart-on-failure) instead of only running cloudflared as a directly tracked process — gives Windows the same auto-start/auto-restart guarantee systemd/launchd provide on Linux/macOS, with no admin rights or stored credentials required
+- Windows: `zt watchdog` is now available, running as its own `zt-watchdog` scheduled task
+- CI: `windows-latest` added to the build/vet/test matrix (previously windows-tagged files were only cross-compiled at release time, with no tests run)
+
+### Fixed
+
+- `zt up`/`down`/`doctor`/`ls` no longer hardcode "systemd"/`.service` in their output — these strings were unreachable on Windows before this release (`IsInstalled` always returned `false` there) but would have been actively misleading once Task Scheduler support landed
+
 ## [0.6.1] - 2026-07-18
 
 ### Added

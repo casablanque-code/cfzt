@@ -237,7 +237,7 @@ func createTunnel(opts tunnelOpts) error {
 		}
 		fmt.Printf("     %s pid: %d (no auto-restart)\n", warnFn("!"), pid)
 	} else {
-		fmt.Printf("     %s service: zt-%s.service (auto-start on boot)\n", okFn("✓"), opts.name)
+		fmt.Printf("     %s service: %s\n", okFn("✓"), service.Description(opts.name))
 	}
 
 	// 8. Persist state

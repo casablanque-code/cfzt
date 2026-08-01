@@ -215,3 +215,13 @@ func WatchdogIsInstalled() bool {
 
 // LingerEnabled always returns true on macOS — LaunchAgents run at login automatically.
 func LingerEnabled() bool { return true }
+
+// Description returns a human-readable label for the installed service,
+// used in zt up's output.
+func Description(name string) string {
+	return fmt.Sprintf("com.zt.%s (auto-start at login)", name)
+}
+
+// ManagerName returns a short label for the service manager in use,
+// for generic status/error messages that shouldn't hardcode "launchd".
+func ManagerName() string { return "launchd" }

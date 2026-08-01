@@ -3,6 +3,7 @@ package state
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -125,6 +126,9 @@ func TestSaveThenLoad_RoundTrip(t *testing.T) {
 }
 
 func TestSave_FilePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("NTFS has no owner/group/other permission bits — os.WriteFile's mode argument can only toggle the read-only attribute there, always reporting 0666/0444 regardless of what's passed")
+	}
 	home := t.TempDir()
 	testutil.SetHome(t, home)
 

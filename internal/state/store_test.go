@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/casablanque-code/cfzt/internal/testutil"
 )
 
 func TestLoadStore_MissingFileReturnsEmptyStore(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.SetHome(t, t.TempDir())
 
 	s, err := LoadStore()
 	if err != nil {
@@ -24,7 +26,7 @@ func TestLoadStore_MissingFileReturnsEmptyStore(t *testing.T) {
 
 func TestLoadStore_Malformed(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.SetHome(t, home)
 
 	if err := os.WriteFile(filepath.Join(home, stateFileName), []byte("{not json"), 0600); err != nil {
 		t.Fatal(err)
@@ -37,7 +39,7 @@ func TestLoadStore_Malformed(t *testing.T) {
 
 func TestLoadStore_NullTunnelsFieldBecomesEmptyMap(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.SetHome(t, home)
 
 	// A state file saved with zero tunnels serializes "tunnels":null via
 	// encoding/json for a nil map - LoadStore must not hand back a nil
@@ -90,7 +92,7 @@ func TestStore_All(t *testing.T) {
 }
 
 func TestSaveThenLoad_RoundTrip(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.SetHome(t, t.TempDir())
 
 	s := &Store{Tunnels: make(map[string]*Tunnel)}
 	want := &Tunnel{
@@ -124,7 +126,7 @@ func TestSaveThenLoad_RoundTrip(t *testing.T) {
 
 func TestSave_FilePermissions(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.SetHome(t, home)
 
 	s := &Store{Tunnels: make(map[string]*Tunnel)}
 	s.Set(&Tunnel{Name: "grafana"})

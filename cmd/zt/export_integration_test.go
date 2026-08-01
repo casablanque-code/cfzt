@@ -7,10 +7,11 @@ import (
 
 	"github.com/casablanque-code/cfzt/internal/manifest"
 	"github.com/casablanque-code/cfzt/internal/state"
+	"github.com/casablanque-code/cfzt/internal/testutil"
 )
 
 func TestRunExport_NoTunnels(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.SetHome(t, t.TempDir())
 	dir := t.TempDir()
 	flagExportOut = filepath.Join(dir, "zt.yaml")
 	t.Cleanup(func() { flagExportOut = "zt.yaml" })
@@ -25,7 +26,7 @@ func TestRunExport_NoTunnels(t *testing.T) {
 
 func TestRunExport_WritesManifest(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.SetHome(t, home)
 
 	store, err := state.LoadStore()
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/casablanque-code/cfzt/internal/manifest"
 	"github.com/casablanque-code/cfzt/internal/state"
+	"github.com/casablanque-code/cfzt/internal/testutil"
 )
 
 func writeManifest(t *testing.T, dir string, m *manifest.Manifest) string {
@@ -20,7 +21,7 @@ func writeManifest(t *testing.T, dir string, m *manifest.Manifest) string {
 }
 
 func TestRunApply_EmptyManifest(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.SetHome(t, t.TempDir())
 	dir := t.TempDir()
 	path := writeManifest(t, dir, &manifest.Manifest{Services: map[string]manifest.ServiceSpec{}})
 
@@ -31,7 +32,7 @@ func TestRunApply_EmptyManifest(t *testing.T) {
 
 func TestRunApply_AllServicesAlreadyExist(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.SetHome(t, home)
 
 	store, err := state.LoadStore()
 	if err != nil {
@@ -54,7 +55,7 @@ func TestRunApply_AllServicesAlreadyExist(t *testing.T) {
 
 func TestRunApply_UntrackedLocalTunnelIsReportedNotTouched(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.SetHome(t, home)
 
 	store, err := state.LoadStore()
 	if err != nil {
@@ -90,7 +91,7 @@ func TestRunApply_UntrackedLocalTunnelIsReportedNotTouched(t *testing.T) {
 // cloudflared binary at all, so this exercises that guard deterministically
 // without needing network access or real credentials.
 func TestRunApply_NewService_FailsCleanlyWithoutCloudflared(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.SetHome(t, t.TempDir())
 	// Make sure a real cloudflared on the test runner's PATH can't leak in
 	// and change this test's behavior.
 	t.Setenv("PATH", t.TempDir())
@@ -107,7 +108,7 @@ func TestRunApply_NewService_FailsCleanlyWithoutCloudflared(t *testing.T) {
 }
 
 func TestRunApply_MissingManifestFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.SetHome(t, t.TempDir())
 
 	err := runApply(nil, []string{filepath.Join(t.TempDir(), "does-not-exist.yaml")})
 	if err == nil {

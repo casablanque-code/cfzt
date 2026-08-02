@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/casablanque-code/cfzt/config"
-	"github.com/casablanque-code/cfzt/internal/cloudflare"
 	"github.com/casablanque-code/cfzt/internal/cloudflared"
 	"github.com/casablanque-code/cfzt/internal/service"
 	"github.com/casablanque-code/cfzt/internal/state"
@@ -146,7 +145,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	// 3. Token valid
-	cf := cloudflare.NewClient(cfg.APIToken, cfg.AccountID)
+	cf := newCFClient(cfg.APIToken, cfg.AccountID)
 	if !check("API token valid", cf.VerifyToken(),
 		"Cloudflare → My Profile → API Tokens — check permissions") {
 		problems++

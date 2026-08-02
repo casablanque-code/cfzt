@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/casablanque-code/cfzt/config"
-	"github.com/casablanque-code/cfzt/internal/cloudflare"
 	"github.com/casablanque-code/cfzt/internal/cloudflared"
 	"github.com/casablanque-code/cfzt/internal/service"
 	"github.com/casablanque-code/cfzt/internal/state"
@@ -37,7 +36,7 @@ func runDown(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("tunnel %q not found in local state", name)
 	}
 
-	cf := cloudflare.NewClient(cfg.APIToken, cfg.AccountID)
+	cf := newCFClient(cfg.APIToken, cfg.AccountID)
 	okFn := color.New(color.FgGreen).SprintFunc()
 	warnFn := color.New(color.FgYellow).SprintFunc()
 	boldFmt := color.New(color.Bold).SprintFunc()

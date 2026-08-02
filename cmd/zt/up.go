@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/casablanque-code/cfzt/config"
-	"github.com/casablanque-code/cfzt/internal/cloudflare"
 	"github.com/casablanque-code/cfzt/internal/cloudflared"
 	"github.com/casablanque-code/cfzt/internal/docker"
 	"github.com/casablanque-code/cfzt/internal/service"
@@ -137,7 +136,7 @@ func createTunnel(opts tunnelOpts) error {
 		return fmt.Errorf("tunnel %q already exists — run `zt down %s` first", opts.name, opts.name)
 	}
 
-	cf := cloudflare.NewClient(cfg.APIToken, cfg.AccountID)
+	cf := newCFClient(cfg.APIToken, cfg.AccountID)
 	hostname := opts.name + "." + cfg.Domain
 
 	fmt.Printf("\n%s\n\n", boldFmt(fmt.Sprintf("⚡ Bringing up %s → localhost:%s", hostname, opts.port)))

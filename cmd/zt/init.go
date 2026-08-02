@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/casablanque-code/cfzt/config"
-	"github.com/casablanque-code/cfzt/internal/cloudflare"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -55,7 +54,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Printf("  → Verifying API token... ")
-	cf := cloudflare.NewClient(token, accountID)
+	cf := newCFClient(token, accountID)
 	if err := cf.VerifyToken(); err != nil {
 		fmt.Println()
 		fmt.Printf("  %s Token verification failed: %v\n", warn("!"), err)

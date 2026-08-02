@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-08-02
+
+### Fixed
+
+- Windows: schtasks error output is emitted in the console's active codepage (e.g. CP866 on ru-RU systems) and was being captured/printed assuming UTF-8, turning every schtasks failure into mojibake. Console is now switched to UTF-8 (65001) once per process before any schtasks call
+- Windows: `Install()`/`Uninstall()`/`InstallWatchdog()`/`UninstallWatchdog()` now explain the most common real-world cause of "Access Denied" — a `zt-*` task previously created or touched from an elevated (Administrator) prompt can't be overwritten from a normal session, even with `/f` — and give the exact command to clear it
+- Windows: `IsActive`/`WatchdogIsActive` parsed schtasks' localized `Status:`/`Running` text output, which silently always returned `false` on non-English Windows (e.g. ru-RU). Now uses PowerShell's `Get-ScheduledTask`, whose `State` is a culture-invariant enum
+
 ## [0.7.1] - 2026-08-02
 
 ### Added

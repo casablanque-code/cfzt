@@ -1,27 +1,27 @@
 {
-    "version": "0.7.1",
-    "description": "Zero Trust tunnel manager for Cloudflare — one command to expose a local service through Cloudflare Zero Trust.",
-    "homepage": "https://github.com/casablanque-code/cfzt",
-    "license": "MIT",
-    "architecture": {
-        "64bit": {
-            "url": "https://github.com/casablanque-code/cfzt/releases/download/v0.7.1/zt-windows-amd64.exe#/zt.exe",
-            "hash": "78ce364064c793da96ac9447442c1d51f07627be5dd198a8c4c538494b05c45b"
-        }
-    },
-    "bin": "zt.exe",
-    "checkver": {
-        "github": "https://github.com/casablanque-code/cfzt"
-    },
-    "autoupdate": {
-        "architecture": {
-            "64bit": {
-                "url": "https://github.com/casablanque-code/cfzt/releases/download/v$version/zt-windows-amd64.exe#/zt.exe"
-            }
-        },
-        "hash": {
-            "url": "$url.sha256",
-            "regex": "([a-fA-F0-9]{64})"
-        }
+  "version": "0.7.2",
+  "description": "Zero Trust tunnel manager for Cloudflare — one command to expose a local service through Cloudflare Zero Trust.",
+  "homepage": "https://github.com/casablanque-code/cfzt",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/casablanque-code/cfzt/releases/download/v0.7.1/zt-windows-amd64.exe#/zt.exe",
+      "hash": "8fe1efe0ab42a1599c03d3479cb24d01d98b8798622439aa92ba50b6cf610ddb"
     }
+  },
+  "bin": "zt.exe",
+  "checkver": {
+    "github": "https://github.com/casablanque-code/cfzt"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/casablanque-code/cfzt/releases/download/v$version/zt-windows-amd64.exe#/zt.exe"
+      }
+    },
+    "hash": {
+      "url": "$url.sha256",
+      "regex": "([a-fA-F0-9]{64})"
+    }
+  }
 }

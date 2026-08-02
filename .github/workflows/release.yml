@@ -59,6 +59,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           HASH=$(awk '{print $1}' dist/zt-windows-amd64.exe.sha256)
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/zt-windows-amd64.exe#/zt.exe"
 
           if [[ ! "$HASH" =~ ^[a-fA-F0-9]{64}$ ]]; then
             echo "error: could not read a valid sha256 from dist/zt-windows-amd64.exe.sha256 (got: '$HASH')" >&2
@@ -71,8 +72,13 @@ jobs:
           git fetch origin main
           git checkout -B main origin/main
 
-          jq --arg version "$VERSION" --arg hash "$HASH" \
-            '.version = $version | .architecture["64bit"].hash = $hash' \
+          # Every field the manifest pins to a specific release —
+          # version, url, hash — must be bumped together. Missing the
+          # url here once already shipped a bucket that reported the
+          # new version but downloaded the previous release's binary
+          # and failed its own hash check.
+          jq --arg version "$VERSION" --arg url "$URL" --arg hash "$HASH" \
+            '.version = $version | .architecture["64bit"].url = $url | .architecture["64bit"].hash = $hash' \
             bucket/zt.json > bucket/zt.json.tmp
           mv bucket/zt.json.tmp bucket/zt.json
 

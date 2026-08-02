@@ -155,6 +155,28 @@ func TestInstall_FailsCleanlyWithoutCloudflared(t *testing.T) {
 	}
 }
 
+func TestPSQuote(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"zt-watchdog", "'zt-watchdog'"},
+		{"it's", "'it''s'"},
+	}
+	for _, tt := range tests {
+		if got := psQuote(tt.in); got != tt.want {
+			t.Errorf("psQuote(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestAccessDeniedHint(t *testing.T) {
+	hint := accessDeniedHint("zt-watchdog")
+	if !strings.Contains(hint, "zt-watchdog") {
+		t.Errorf("accessDeniedHint() = %q, want it to mention the task name", hint)
+	}
+	if !strings.Contains(hint, "schtasks /delete") {
+		t.Errorf("accessDeniedHint() = %q, want a concrete schtasks /delete command", hint)
+	}
+}
+
 func TestTaskExists_NotInstalled(t *testing.T) {
 	if taskExists("zt-test-task-does-not-exist") {
 		t.Error("taskExists() = true, want false for a task that was never created")

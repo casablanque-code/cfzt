@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"unicode/utf16"
 )
 
@@ -104,8 +105,42 @@ func quoteArg(a string) string {
 	return `"` + strings.ReplaceAll(a, `"`, `\"`) + `"`
 }
 
+var setConsoleUTF8Once sync.Once
+
+// ensureUTF8Console switches the current console's active output codepage
+// to UTF-8 (65001). schtasks always emits its (often localized) error text
+// in whatever codepage the console is running — CP866 on ru-RU Windows,
+// for instance — so capturing that output as a Go string and printing it
+// assuming UTF-8 produces mojibake. Idempotent per process; chcp.com is a
+// real standalone executable (not a cmd.exe builtin), so no shell wrapper
+// is needed.
+func ensureUTF8Console() {
+	setConsoleUTF8Once.Do(func() {
+		_ = exec.Command("chcp.com", "65001").Run()
+	})
+}
+
+// runSchtasks runs schtasks with the given args after ensuring the console
+// is in UTF-8, so any error text it captures is decodable.
+func runSchtasks(args ...string) ([]byte, error) {
+	ensureUTF8Console()
+	return exec.Command("schtasks", args...).CombinedOutput()
+}
+
+// accessDeniedHint is appended to /create and /delete failures. Task
+// Scheduler ties task ownership to whichever principal created it — if a
+// zt-* task was ever created or touched from an elevated (Administrator)
+// prompt, a later attempt from a normal session gets Access Denied even
+// with /f, since it can't take over a task it doesn't own. This is the
+// single most common cause of a "no admin needed" install suddenly
+// failing, so it's worth a hint even when a given failure turns out to be
+// something else — it's cheap to check and confirms or rules itself out.
+func accessDeniedHint(taskName string) string {
+	return fmt.Sprintf("(if this is a permissions error: a %s task created or modified from an elevated/Administrator prompt can't be overwritten from a normal session, even with /f — delete it once from an elevated prompt with `schtasks /delete /tn %s /f`, then retry normally)", taskName, taskName)
+}
+
 func taskExists(name string) bool {
-	err := exec.Command("schtasks", "/query", "/tn", name).Run()
+	_, err := runSchtasks("/query", "/tn", name)
 	return err == nil
 }
 
@@ -145,9 +180,9 @@ func createTask(name, xml string) error {
 		return fmt.Errorf("failed to write task file: %w", err)
 	}
 
-	out, err := exec.Command("schtasks", "/create", "/tn", name, "/xml", tmpPath, "/f").CombinedOutput()
+	out, err := runSchtasks("/create", "/tn", name, "/xml", tmpPath, "/f")
 	if err != nil {
-		return fmt.Errorf("schtasks /create: %w\n%s", err, out)
+		return fmt.Errorf("schtasks /create: %w\n%s\n%s", err, out, accessDeniedHint(name))
 	}
 	return nil
 }
@@ -172,8 +207,8 @@ func Install(name, configPath, logPath string) error {
 // fires when the action process exits, not on demand).
 func Restart(name string) error {
 	tn := taskName(name)
-	_ = exec.Command("schtasks", "/end", "/tn", tn).Run()
-	out, err := exec.Command("schtasks", "/run", "/tn", tn).CombinedOutput()
+	_, _ = runSchtasks("/end", "/tn", tn)
+	out, err := runSchtasks("/run", "/tn", tn)
 	if err != nil {
 		return fmt.Errorf("schtasks /run: %w\n%s", err, out)
 	}
@@ -187,9 +222,9 @@ func Uninstall(name string) error {
 	if !taskExists(tn) {
 		return nil
 	}
-	out, err := exec.Command("schtasks", "/delete", "/tn", tn, "/f").CombinedOutput()
+	out, err := runSchtasks("/delete", "/tn", tn, "/f")
 	if err != nil {
-		return fmt.Errorf("schtasks /delete: %w\n%s", err, out)
+		return fmt.Errorf("schtasks /delete: %w\n%s\n%s", err, out, accessDeniedHint(tn))
 	}
 	return nil
 }
@@ -237,9 +272,9 @@ func UninstallWatchdog() error {
 	if !taskExists(watchdogTaskName) {
 		return nil
 	}
-	out, err := exec.Command("schtasks", "/delete", "/tn", watchdogTaskName, "/f").CombinedOutput()
+	out, err := runSchtasks("/delete", "/tn", watchdogTaskName, "/f")
 	if err != nil {
-		return fmt.Errorf("schtasks /delete: %w\n%s", err, out)
+		return fmt.Errorf("schtasks /delete: %w\n%s\n%s", err, out, accessDeniedHint(watchdogTaskName))
 	}
 	return nil
 }
@@ -249,18 +284,31 @@ func WatchdogIsInstalled() bool {
 	return taskExists(watchdogTaskName)
 }
 
-// taskIsRunning reports whether the named Task Scheduler task's last run
-// is currently in the "Running" state.
+// taskIsRunning reports whether the named Task Scheduler task is
+// currently running.
+//
+// This shells out to PowerShell's Get-ScheduledTask rather than parsing
+// `schtasks /query ... /fo list /v` output, because schtasks localizes
+// both its field labels ("Status:") and values ("Running") to the OS
+// display language — on a ru-RU system those come back as something
+// like "Состояние:"/"Выполняется", so a hardcoded English match against
+// them silently always returns false. Get-ScheduledTask's State is a
+// .NET enum; its symbolic name (Running/Ready/Disabled/...) doesn't
+// change with display language.
 func taskIsRunning(name string) bool {
-	out, err := exec.Command("schtasks", "/query", "/tn", name, "/fo", "list", "/v").Output()
+	ensureUTF8Console()
+	out, err := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		fmt.Sprintf("(Get-ScheduledTask -TaskName %s -ErrorAction SilentlyContinue).State", psQuote(name)),
+	).Output()
 	if err != nil {
 		return false
 	}
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(line)
-		if after, ok := strings.CutPrefix(line, "Status:"); ok {
-			return strings.TrimSpace(after) == "Running"
-		}
-	}
-	return false
+	return strings.TrimSpace(string(out)) == "Running"
+}
+
+// psQuote single-quotes a string for interpolation into a PowerShell
+// command, escaping embedded single quotes by doubling them (PowerShell's
+// single-quoted string escaping rule).
+func psQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }

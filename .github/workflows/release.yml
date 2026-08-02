@@ -54,3 +54,34 @@ jobs:
             dist/zt-darwin-arm64.sha256
             dist/zt-windows-amd64.exe.sha256
             dist/checksums.txt
+
+      - name: Update Scoop bucket
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          HASH=$(awk '{print $1}' dist/zt-windows-amd64.exe.sha256)
+
+          if [[ ! "$HASH" =~ ^[a-fA-F0-9]{64}$ ]]; then
+            echo "error: could not read a valid sha256 from dist/zt-windows-amd64.exe.sha256 (got: '$HASH')" >&2
+            exit 1
+          fi
+
+          # This job runs with the tag as a detached HEAD (that's what
+          # built the release binaries), but the bucket lives on main —
+          # switch there before editing it.
+          git fetch origin main
+          git checkout -B main origin/main
+
+          jq --arg version "$VERSION" --arg hash "$HASH" \
+            '.version = $version | .architecture["64bit"].hash = $hash' \
+            bucket/zt.json > bucket/zt.json.tmp
+          mv bucket/zt.json.tmp bucket/zt.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- bucket/zt.json; then
+            echo "bucket/zt.json already up to date, nothing to commit"
+          else
+            git add bucket/zt.json
+            git commit -m "chore(scoop): bump bucket to ${GITHUB_REF_NAME}"
+            git push origin main
+          fi

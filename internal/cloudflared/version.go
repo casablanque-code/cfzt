@@ -21,7 +21,15 @@ type Version struct {
 
 func (v Version) String() string { return v.Raw }
 
+// TooOld reports whether this version predates the minimum supported
+// cloudflared release. Year == 0 means the version string didn't match
+// the expected format (see parseVersion) — that's deliberately never
+// "too old": we don't know what it is, so we don't block on it, we just
+// can't give a confident answer either.
 func (v Version) TooOld() bool {
+	if v.Year == 0 {
+		return false
+	}
 	return v.Year < minYear
 }
 

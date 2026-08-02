@@ -5,11 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.1] - 2026-08-02
 
 ### Added
 
-- Windows: Scoop bucket (self-hosted in this repo's `bucket/` folder) — `scoop bucket add cfzt https://github.com/casablanque-code/cfzt && scoop install cfzt/zt`. Auto-updates version/checksum on every release via a new GitHub Actions workflow, so `scoop update zt` always resolves the latest tag with no manual manifest maintenance
+- Windows: Scoop bucket (self-hosted in this repo's `bucket/` folder) — `scoop bucket add cfzt https://github.com/casablanque-code/cfzt && scoop install cfzt/zt`
+
+### Fixed
+
+- Windows: `zt up` and `zt watchdog enable` failed to install a real service ("ERROR: The task XML is malformed") whenever the generated command contained an XML special character — notably the `&` in the cmd.exe log-redirection wrapper's `2>&1`, which broke on every install. Silently fell back to PID mode (no auto-restart) instead of erroring loudly. Task XML values are now properly XML-escaped
+- CI: Scoop bucket auto-update never actually ran — `release: types: [published]` doesn't fire for releases created with the default `GITHUB_TOKEN`, so `scoop update zt` kept reporting 0.7.0 as latest after this release shipped. Bucket bump now happens inline in the release workflow itself instead of a separate triggered workflow
 
 ## [0.7.0] - 2026-08-01
 

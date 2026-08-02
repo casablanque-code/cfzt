@@ -3,6 +3,8 @@
 package service
 
 import (
+	"encoding/xml"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,25 +47,56 @@ func TestQuoteArg(t *testing.T) {
 }
 
 func TestBuildTaskXML(t *testing.T) {
-	xml := buildTaskXML("zt tunnel — grafana", "cmd.exe", "/c", `"C:\cloudflared.exe" tunnel run`)
+	taskXML := buildTaskXML("zt tunnel — grafana", "cmd.exe", "/c", `"C:\cloudflared.exe" tunnel run`)
 
 	for _, want := range []string{
 		"<Description>zt tunnel — grafana</Description>",
 		"<Command>cmd.exe</Command>",
-		`<Arguments>"/c" "\"C:\cloudflared.exe\" tunnel run"</Arguments>`,
+		// quoteArg's cmd.exe-quoting happens first, then xmlEscapeText
+		// escapes the resulting double quotes for XML text content.
+		`<Arguments>&#34;/c&#34; &#34;\&#34;C:\cloudflared.exe\&#34; tunnel run&#34;</Arguments>`,
 		"<LogonTrigger>",
 		"<RestartOnFailure>",
 	} {
-		if !strings.Contains(xml, want) {
-			t.Errorf("buildTaskXML() missing %q in output:\n%s", want, xml)
+		if !strings.Contains(taskXML, want) {
+			t.Errorf("buildTaskXML() missing %q in output:\n%s", want, taskXML)
 		}
 	}
 
 	// The XML must never request stored credentials - that's what keeps
 	// Install() from needing admin rights or a password prompt.
 	for _, unwanted := range []string{"<LogonType>Password</LogonType>", "<UserId>"} {
-		if strings.Contains(xml, unwanted) {
+		if strings.Contains(taskXML, unwanted) {
 			t.Errorf("buildTaskXML() contains %q, task should not require stored credentials", unwanted)
+		}
+	}
+}
+
+// TestBuildTaskXML_EscapesAmpersand is a regression test for the exact
+// output Install()/InstallWatchdog() generate for their cmd.exe log
+// redirection wrapper (">> log 2>&1"). The unescaped '&' produced XML
+// schtasks rejected with "ERROR: The task XML is malformed.", failing
+// every real zt up / zt watchdog enable on Windows.
+func TestBuildTaskXML_EscapesAmpersand(t *testing.T) {
+	inner := `"C:\cloudflared.exe" tunnel run >> "C:\cloudflared.log" 2>&1`
+	got := buildTaskXML("zt tunnel — grafana", "cmd.exe", "/c", inner)
+
+	if strings.Contains(got, "2>&1") {
+		t.Errorf("buildTaskXML() contains a raw unescaped '&', want it escaped as &amp;:\n%s", got)
+	}
+	if !strings.Contains(got, "2&gt;&amp;1") {
+		t.Errorf("buildTaskXML() = %s, want the redirect escaped as 2&gt;&amp;1", got)
+	}
+
+	dec := xml.NewDecoder(strings.NewReader(strings.Replace(got, `encoding="UTF-16"`, `encoding="UTF-8"`, 1)))
+	for {
+		_, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Errorf("buildTaskXML() output does not parse as XML: %v\n%s", err, got)
+			break
 		}
 	}
 }

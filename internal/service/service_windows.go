@@ -4,6 +4,7 @@ package service
 
 import (
 	"encoding/binary"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"os/exec"
@@ -66,18 +67,39 @@ const watchdogTaskName = "zt-watchdog"
 // buildTaskXML renders a Task Scheduler task definition for running cmd
 // with args at user logon, restarting on failure. description is used for
 // the task's RegistrationInfo only — purely informational.
+//
+// description/cmd/args are XML-escaped before insertion. Without this,
+// any value containing an XML special character produces a task file
+// Windows rejects outright — the log-redirection wrapper's "2>&1", for
+// instance, has a bare '&' that made every Install()/InstallWatchdog()
+// call fail with "ERROR: The task XML is malformed."
 func buildTaskXML(description, cmd string, args ...string) string {
 	quoted := make([]string, len(args))
 	for i, a := range args {
 		quoted[i] = quoteArg(a)
 	}
-	return fmt.Sprintf(taskXMLTemplate, description, cmd, strings.Join(quoted, " "))
+	return fmt.Sprintf(taskXMLTemplate,
+		xmlEscapeText(description),
+		xmlEscapeText(cmd),
+		xmlEscapeText(strings.Join(quoted, " ")),
+	)
+}
+
+// xmlEscapeText escapes s for use as XML element text content.
+func xmlEscapeText(s string) string {
+	var buf strings.Builder
+	// xml.EscapeText never returns an error for a strings.Builder target.
+	_ = xml.EscapeText(&buf, []byte(s))
+	return buf.String()
 }
 
 // quoteArg wraps an argument in double quotes for the Task Scheduler
 // <Arguments> string, escaping any embedded double quotes. Paths on
 // Windows routinely contain spaces (Program Files, user profile dirs),
-// so unquoted arguments would be split incorrectly.
+// so unquoted arguments would be split incorrectly. This is cmd.exe/CRT
+// argument-quoting syntax, applied before the XML escaping in
+// buildTaskXML — the two operate on different layers and both are
+// needed.
 func quoteArg(a string) string {
 	return `"` + strings.ReplaceAll(a, `"`, `\"`) + `"`
 }

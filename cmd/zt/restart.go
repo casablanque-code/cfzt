@@ -49,7 +49,7 @@ func restartTunnel(name string) error {
 	okFn := color.New(color.FgGreen).SprintFunc()
 
 	if service.IsInstalled(name) {
-		fmt.Printf("  → systemctl --user restart zt-%s\n", name)
+		fmt.Printf("  → restarting %s\n", service.ManagerName())
 		if err := service.Restart(name); err != nil {
 			return err
 		}

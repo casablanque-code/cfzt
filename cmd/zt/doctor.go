@@ -111,13 +111,13 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// 2. Linger check (Linux only)
+	// 2. Linger / auto-start-at-login check
 	if !service.LingerEnabled() {
 		fmt.Printf("  %s  linger not enabled — tunnels may not start after reboot\n", warn("!"))
 		fmt.Printf("     %s run: loginctl enable-linger %s\n", dim("hint:"), os.Getenv("USER"))
 		problems++
 	} else {
-		fmt.Printf("  %s  systemd linger enabled\n", pass("✓"))
+		fmt.Printf("  %s  %s configured to auto-start at login\n", pass("✓"), service.ManagerName())
 	}
 
 	// 2b. Watchdog

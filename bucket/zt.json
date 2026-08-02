@@ -5,7 +5,7 @@
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/casablanque-code/cfzt/releases/download/v0.7.1/zt-windows-amd64.exe#/zt.exe",
+      "url": "https://github.com/casablanque-code/cfzt/releases/download/v0.7.2/zt-windows-amd64.exe#/zt.exe",
       "hash": "8fe1efe0ab42a1599c03d3479cb24d01d98b8798622439aa92ba50b6cf610ddb"
     }
   },

@@ -91,3 +91,64 @@ jobs:
             git commit -m "chore(scoop): bump bucket to ${GITHUB_REF_NAME}"
             git push origin main
           fi
+
+      - name: Update Homebrew tap
+        run: |
+          hash() { awk '{print $1}' "dist/$1.sha256"; }
+
+          for f in zt-linux-amd64 zt-linux-arm64 zt-darwin-amd64 zt-darwin-arm64; do
+            h=$(hash "$f")
+            if [[ ! "$h" =~ ^[a-fA-F0-9]{64}$ ]]; then
+              echo "error: could not read a valid sha256 for $f (got: '$h')" >&2
+              exit 1
+            fi
+          done
+
+          # Regenerated wholesale rather than patched field-by-field — a
+          # partial update (bump version/hash but forget one of four
+          # platform URLs) is exactly the bug that already broke the
+          # Scoop bucket once. A fresh file each release can't drift.
+          cat > Formula/zt.rb <<EOF
+          class Zt < Formula
+            desc "Zero Trust tunnel manager for Cloudflare"
+            homepage "https://github.com/${GITHUB_REPOSITORY}"
+            version "${GITHUB_REF_NAME#v}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/zt-darwin-arm64"
+                sha256 "$(hash zt-darwin-arm64)"
+              else
+                url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/zt-darwin-amd64"
+                sha256 "$(hash zt-darwin-amd64)"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/zt-linux-arm64"
+                sha256 "$(hash zt-linux-arm64)"
+              else
+                url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/zt-linux-amd64"
+                sha256 "$(hash zt-linux-amd64)"
+              end
+            end
+
+            def install
+              bin.install Dir["zt-*"].first => "zt"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/zt version")
+            end
+          end
+          EOF
+
+          if git diff --quiet -- Formula/zt.rb; then
+            echo "Formula/zt.rb already up to date, nothing to commit"
+          else
+            git add Formula/zt.rb
+            git commit -m "chore(homebrew): bump formula to ${GITHUB_REF_NAME}"
+            git push origin main
+          fi

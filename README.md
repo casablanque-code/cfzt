@@ -91,11 +91,20 @@ go build -o zt ./cmd/zt
 sudo mv zt /usr/local/bin/
 ```
 
-### Option D — download binary
+### Option D — Homebrew (macOS + Linux)
+
+```bash
+brew tap casablanque-code/cfzt https://github.com/casablanque-code/cfzt
+brew install zt
+```
+
+The formula lives in this repo's [`Formula/`](Formula/) folder and updates itself automatically on every release (same mechanism as the Scoop bucket below). `brew upgrade zt` picks up new versions.
+
+### Option E — download binary
 
 Download from [Releases](https://github.com/casablanque-code/cfzt/releases) and place in your PATH. Each release includes `.sha256` checksum files and a combined `checksums.txt`.
 
-### Option E — Scoop (Windows)
+### Option F — Scoop (Windows)
 
 ```powershell
 scoop bucket add cfzt https://github.com/casablanque-code/cfzt
@@ -104,7 +113,7 @@ scoop install cfzt/zt
 
 The bucket lives in this repo's [`bucket/`](bucket/) folder and updates itself automatically on every release. To pick up a new version, run `scoop update` (no arguments) first — that's what actually `git pull`s the bucket repos — then `scoop update zt`. Running `scoop update zt` on its own can still report the old version if the bucket itself hasn't been refreshed yet.
 
-### Option F — Windows (PowerShell)
+### Option G — Windows (PowerShell)
 
 See [Windows support](#windows-support) for what currently works — this
 installs the binary and adds it to your user `PATH` safely:
@@ -163,7 +172,7 @@ If `cloudflared` isn't on `PATH` (or task creation fails for any other
 reason), `zt up` falls back to running it as a directly tracked process —
 you'll see `(no auto-restart)` in the output when that happens.
 
-(Windows install: [Scoop](#option-e--scoop-windows) (recommended, self-updating) or [PowerShell script](#option-f--windows-powershell) above. A winget package is planned — see the issue tracker for status.)
+(Windows install: [Scoop](#option-f--scoop-windows) (recommended, self-updating) or [PowerShell script](#option-g--windows-powershell) above. A winget package is planned — see the issue tracker for status.)
 
 ---
 

@@ -102,7 +102,7 @@ scoop bucket add cfzt https://github.com/casablanque-code/cfzt
 scoop install cfzt/zt
 ```
 
-The bucket lives in this repo's [`bucket/`](bucket/) folder and updates itself automatically on every release. `scoop update zt` upgrades in place — no manual re-download or checksum verification needed, Scoop handles both.
+The bucket lives in this repo's [`bucket/`](bucket/) folder and updates itself automatically on every release. To pick up a new version, run `scoop update` (no arguments) first — that's what actually `git pull`s the bucket repos — then `scoop update zt`. Running `scoop update zt` on its own can still report the old version if the bucket itself hasn't been refreshed yet.
 
 ### Option F — Windows (PowerShell)
 

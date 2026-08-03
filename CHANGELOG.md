@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `doctor` no longer claims "systemd linger enabled" on macOS/Windows — that check is hardcoded to always pass there (LaunchAgents and logon-trigger scheduled tasks already auto-start, there's no separate linger toggle), so the message was simply false on those platforms. Now reports what's actually being confirmed ("systemd"/"launchd"/"scheduled task" configured to auto-start at login), via the same `service.ManagerName()` used elsewhere
+- `restart` printed a hardcoded `systemctl --user restart zt-<name>` on every platform, including Windows — missed when the same class of bug was fixed elsewhere. Now uses `service.ManagerName()` like `up`/`down`/`doctor`/`ls` already do
+
 ### Added
 
 - Homebrew tap (self-hosted in this repo's `Formula/` folder, macOS + Linux) — `brew tap casablanque-code/cfzt https://github.com/casablanque-code/cfzt && brew install zt`. Auto-updates on every release via a new release.yml step that regenerates the whole formula (not a partial field patch — the Scoop bucket already broke once from exactly that)
+
+### Internal
+
+- Significantly expanded test coverage across `cmd/zt` and `internal/cloudflared` (previously thin or untested: config generation, version parsing, and most CLI command error paths). Caught one real bug along the way: `cloudflared.Version.TooOld()` reported `true` for an unparseable `--version` output instead of the intended "don't block on what we don't recognize" — fixed
+- Cloudflare API client is now injected via a swappable `newCFClient` var instead of called directly, enabling the above test coverage without hitting the real API
 
 ## [0.7.2] - 2026-08-02
 

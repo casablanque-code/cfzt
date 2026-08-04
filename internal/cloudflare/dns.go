@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 type DNSRecord struct {
@@ -57,13 +58,22 @@ func (c *Client) GetZoneID(domain string) (string, error) {
 }
 
 // UpsertCNAME creates or replaces a CNAME pointing subdomain → tunnel.cfargotunnel.com.
-// If any record with the same name already exists, it is deleted first.
-func (c *Client) UpsertCNAME(zoneID, subdomain, tunnelID string) (string, error) {
+// If a record with the same name already exists and looks like a record zt
+// itself created (a CNAME to *.cfargotunnel.com), it's replaced automatically —
+// that's the normal "re-run zt up on a stale tunnel" case. Any other existing
+// record (a real A/AAAA/CNAME the caller didn't create with zt) is left alone
+// unless force is true, since deleting it would be destructive and silent.
+func (c *Client) UpsertCNAME(zoneID, subdomain, tunnelID string, force bool) (string, error) {
 	existing, err := c.FindDNSRecord(zoneID, subdomain)
 	if err != nil {
 		return "", fmt.Errorf("checking existing DNS records: %w", err)
 	}
 	if existing != nil {
+		if !force && !looksLikeZtRecord(existing) {
+			return "", fmt.Errorf(
+				"existing DNS record found for %s (type %s, content %q) that zt didn't create — refusing to replace it\nuse --force to replace it anyway",
+				subdomain, existing.Type, existing.Content)
+		}
 		if err := c.DeleteDNSRecord(zoneID, existing.ID); err != nil {
 			return "", fmt.Errorf("removing existing DNS record: %w", err)
 		}
@@ -141,4 +151,13 @@ func (c *Client) FindDNSRecord(zoneID, name string) (*DNSRecord, error) {
 		return nil, nil
 	}
 	return &lr.Result[0], nil
+}
+
+// looksLikeZtRecord reports whether a DNS record looks like something zt
+// itself created — a CNAME pointing at a Cloudflare Tunnel. These are safe
+// to replace automatically (e.g. re-running `zt up` after a stale tunnel).
+// Anything else (A, AAAA, or a CNAME to something that isn't a tunnel) is
+// left alone unless the caller passes --force.
+func looksLikeZtRecord(r *DNSRecord) bool {
+	return r.Type == "CNAME" && strings.HasSuffix(r.Content, ".cfargotunnel.com")
 }

@@ -21,16 +21,17 @@ var (
 	flagDocker   bool
 	flagTCP      bool
 	flagProtocol string
+	flagForce    bool
 )
 
 var upCmd = &cobra.Command{
 	Use:   "up <name> [port]",
 	Short: "Expose a local service via Zero Trust tunnel",
-	Example: `  zt up grafana 3000
-  zt up grafana --docker
+	Example: `  zt up grafana 3000 --allow you@example.com
+  zt up grafana --docker --allow you@example.com
   zt up portainer --docker --allow you@example.com
   zt up api 8080 --public
-  zt up portainer 9000 --tcp`,
+  zt up portainer 9000 --tcp --allow you@example.com`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runUp,
 }
@@ -41,6 +42,7 @@ func init() {
 	upCmd.Flags().BoolVar(&flagDocker, "docker", false, "auto-detect port from Docker container with this name")
 	upCmd.Flags().BoolVar(&flagTCP, "tcp", false, "force TCP (http2) protocol — use if QUIC/UDP is blocked by your ISP")
 	upCmd.Flags().StringVar(&flagProtocol, "protocol", "auto", "cloudflared protocol: auto, quic, http2")
+	upCmd.Flags().BoolVar(&flagForce, "force", false, "replace an existing DNS record that zt didn't create")
 }
 
 // tunnelOpts carries all intent parameters for creating a tunnel.
@@ -52,6 +54,7 @@ type tunnelOpts struct {
 	public   bool
 	emails   []string
 	docker   bool
+	force    bool // replace an existing non-zt DNS record instead of refusing
 }
 
 func runUp(cmd *cobra.Command, args []string) error {
@@ -103,6 +106,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		public:   flagPublic,
 		emails:   flagEmails,
 		docker:   flagDocker,
+		force:    flagForce,
 	})
 }
 
@@ -192,7 +196,7 @@ func createTunnel(opts tunnelOpts) error {
 
 	// 4. Upsert DNS record
 	step("Upserting CNAME: " + hostname)
-	dnsRecordID, err := cf.UpsertCNAME(zoneID, hostname, tunnelID)
+	dnsRecordID, err := cf.UpsertCNAME(zoneID, hostname, tunnelID, opts.force)
 	if err != nil {
 		rollback("", "")
 		return err

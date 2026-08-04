@@ -22,6 +22,7 @@ type ServiceSpec struct {
 	Protocol string   `yaml:"protocol,omitempty"`
 	Public   bool     `yaml:"public,omitempty"`
 	Allow    []string `yaml:"allow,omitempty"`
+	Force    bool     `yaml:"force,omitempty"` // replace an existing non-zt DNS record instead of refusing
 }
 
 // Manifest is the root document of a zt.yaml file.

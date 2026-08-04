@@ -77,7 +77,7 @@ deployments UI automatically is planned — see the issue tracker.
 
 1. Creates a Cloudflare Tunnel
 2. Configures ingress rules
-3. Upserts a CNAME DNS record (replaces any conflicting record)
+3. Upserts a CNAME DNS record (replaces a stale zt-created record automatically; refuses to touch a foreign record unless `--force` is given)
 4. Creates a Zero Trust Access application with an access policy
 5. Installs and starts a systemd (Linux), LaunchAgent (macOS), or Task
    Scheduler (Windows) service
@@ -481,6 +481,7 @@ One of `--allow` or `--public` is required.
 | `--docker` | Auto-detect port from a running Docker container with this name |
 | `--tcp` | Force TCP (http2) — use if QUIC/UDP is blocked by your ISP |
 | `--protocol <proto>` | Protocol: `auto` (default), `quic`, `http2` |
+| `--force` | Replace an existing DNS record for the hostname even if zt didn't create it |
 
 ### `zt logs`
 
@@ -616,7 +617,7 @@ Make sure the domain is added to Cloudflare and the API token has `Zone / DNS / 
 The API token is missing `Account / Access: Apps and Policies / Edit`. Edit the token in the Cloudflare dashboard.
 
 **DNS record conflict**
-`zt up` uses upsert — it removes any existing A, AAAA, or CNAME record with the same name before creating the tunnel CNAME. No manual cleanup needed.
+`zt up` upserts the tunnel's own CNAME automatically — if a previous zt tunnel left a stale CNAME to `*.cfargotunnel.com` for the same hostname, it's replaced without asking. If the hostname already has an A, AAAA, or CNAME record that zt didn't create (e.g. it's pointing somewhere else entirely), `zt up` refuses and prints `existing DNS record found ... refusing to replace it`. Re-run with `--force` to replace it anyway, or free up the hostname first.
 
 **Task doesn't start on Windows / `schtasks` shows the task but it's not running**
 The `zt-<name>` task only fires on logon to *your* account (see [Windows

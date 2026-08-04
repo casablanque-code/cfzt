@@ -76,7 +76,7 @@ func TestUpsertCNAME_DeletesExistingFirst(t *testing.T) {
 		}
 	})
 
-	id, err := c.UpsertCNAME("zone-1", "app.example.com", "tunnel-abc")
+	id, err := c.UpsertCNAME("zone-1", "app.example.com", "tunnel-abc", false)
 	if err != nil {
 		t.Fatalf("UpsertCNAME() error = %v", err)
 	}
@@ -107,8 +107,62 @@ func TestUpsertCNAME_NoExisting(t *testing.T) {
 		jsonHandler(200, `{"result":{"id":"new-rec"},"success":true,"errors":[]}`)(w, r)
 	})
 
-	if _, err := c.UpsertCNAME("zone-1", "app.example.com", "tunnel-abc"); err != nil {
+	if _, err := c.UpsertCNAME("zone-1", "app.example.com", "tunnel-abc", false); err != nil {
 		t.Fatalf("UpsertCNAME() error = %v", err)
+	}
+}
+
+// A record that isn't one zt itself would have created (not a CNAME to
+// *.cfargotunnel.com) must be left alone unless force=true — this is the
+// destructive-DNS guard.
+func TestUpsertCNAME_RefusesForeignRecordWithoutForce(t *testing.T) {
+	var deleteCalled bool
+	c, _ := testServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "DELETE" {
+			deleteCalled = true
+		}
+		if r.Method == "GET" {
+			jsonHandler(200, `{"result":[{"id":"foreign-rec","type":"A","name":"app.example.com","content":"1.2.3.4"}],"success":true,"errors":[]}`)(w, r)
+			return
+		}
+	})
+
+	_, err := c.UpsertCNAME("zone-1", "app.example.com", "tunnel-abc", false)
+	if err == nil {
+		t.Fatal("UpsertCNAME() = nil error, want error for a foreign A record without --force")
+	}
+	if !strings.Contains(err.Error(), "--force") {
+		t.Errorf("error = %q, want it to mention --force", err.Error())
+	}
+	if deleteCalled {
+		t.Error("UpsertCNAME() deleted a foreign DNS record without --force")
+	}
+}
+
+// The same foreign record must be replaced when force=true.
+func TestUpsertCNAME_ReplacesForeignRecordWithForce(t *testing.T) {
+	var calls []string
+	c, _ := testServer(t, func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method)
+		switch r.Method {
+		case "GET":
+			jsonHandler(200, `{"result":[{"id":"foreign-rec","type":"A","name":"app.example.com","content":"1.2.3.4"}],"success":true,"errors":[]}`)(w, r)
+		case "DELETE":
+			jsonHandler(200, `{"success":true,"errors":[]}`)(w, r)
+		case "POST":
+			jsonHandler(200, `{"result":{"id":"new-rec"},"success":true,"errors":[]}`)(w, r)
+		}
+	})
+
+	id, err := c.UpsertCNAME("zone-1", "app.example.com", "tunnel-abc", true)
+	if err != nil {
+		t.Fatalf("UpsertCNAME() error = %v", err)
+	}
+	if id != "new-rec" {
+		t.Errorf("UpsertCNAME() = %q, want new-rec", id)
+	}
+	if len(calls) != 3 || calls[1] != "DELETE" {
+		t.Errorf("calls = %v, want GET, DELETE, POST", calls)
 	}
 }
 

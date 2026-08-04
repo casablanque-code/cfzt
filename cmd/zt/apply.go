@@ -134,6 +134,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 			public:   svc.Public,
 			emails:   svc.Allow,
 			docker:   svc.Docker,
+			force:    svc.Force,
 		}); err != nil {
 			fmt.Printf("  %s %-20s failed: %v\n", warnFn("!"), name, err)
 			failed = append(failed, name)

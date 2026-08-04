@@ -1,4 +1,4 @@
-# zt — Zero Trust tunnel manager
+# zt — expose self-hosted services without the dashboard busywork
 
 [![CI](https://github.com/casablanque-code/cfzt/actions/workflows/ci.yml/badge.svg)](https://github.com/casablanque-code/cfzt/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/casablanque-code/cfzt/branch/main/graph/badge.svg)](https://codecov.io/gh/casablanque-code/cfzt)
@@ -7,13 +7,76 @@
 [![Tiny Tool Town](https://img.shields.io/badge/featured-TinyToolTown-blue)](https://www.tinytooltown.com/tools/cfzt/)
 [![Release](https://img.shields.io/github/v/release/casablanque-code/cfzt)](https://github.com/casablanque-code/cfzt/releases/latest)
 
-One command to expose a local service through Cloudflare Zero Trust.
+You have a service running somewhere. `zt` gives it a secure public
+endpoint through Cloudflare Zero Trust — no dashboard clicking, one command.
 
 ```bash
 zt up portainer --docker --allow you@example.com
 # → https://portainer.yourdomain.com  (ZT-protected, live in ~15s)
 ```
 ![zt demo](demo.gif)
+
+```mermaid
+flowchart LR
+    A[Docker / local service] --> B(zt)
+    B --> C[Cloudflare Tunnel]
+    B --> D[DNS]
+    B --> E[Access]
+    B --> F[Lifecycle<br/>systemd / LaunchAgent / Task Scheduler]
+    C & D & E & F --> G[https://name.example.com]
+```
+
+`zt up <name> <port>` creates the tunnel, ingress rules, DNS record, and
+Access policy, and installs it as a service that survives reboots. `zt down
+<name>` removes everything it created. See [What it does](#what-it-does) for
+the full list.
+
+## Use cases
+
+`zt` doesn't care what's on the other end of the port — the same command
+covers a few different jobs:
+
+**Self-hosted apps & AI tools** — put a dashboard or a local model behind a
+real HTTPS URL with login, instead of leaving it on `localhost` or opening a
+port:
+
+```bash
+zt up grafana 3000 --docker
+zt up open-webui 8080 --docker --allow you@example.com
+```
+
+**Home automation** — reach Home Assistant, Frigate, or Node-RED from
+outside your LAN without a VPN client on every device:
+
+```bash
+zt up home-assistant 8123 --docker --allow you@example.com
+```
+
+**PR preview environments** — give each pull request its own public URL for
+review, and tear it down when the PR closes:
+
+```mermaid
+flowchart LR
+    A[PR opened] --> B[CI builds & starts container<br/>localhost:3000]
+    B --> C["zt up pr-142 3000 --docker"]
+    C --> D[https://pr-142.example.com]
+    E[PR closed] --> F["zt down pr-142"]
+    F --> G[Tunnel, DNS, Access all removed]
+```
+
+```bash
+# on PR open, in CI, after the container is up on localhost:3000
+zt up pr-142 3000 --docker
+
+# on PR close
+zt down pr-142
+```
+
+Self-hosted preview URLs without Vercel, Netlify, or a hosted preview
+platform. A GitHub Action that wires this into PR checks and the
+deployments UI automatically is planned — see the issue tracker.
+
+---
 
 ## What it does
 

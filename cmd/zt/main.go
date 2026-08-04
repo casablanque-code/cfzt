@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/casablanque-code/cfzt/internal/release"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +28,7 @@ var rootCmd = &cobra.Command{
   zt status <name>             show tunnel details
   zt logs <name>               show cloudflared logs
   zt doctor                    check system and tunnel health
+  zt version                   show the running version
   zt export [-o zt.yaml]       export managed tunnels to a portable manifest
   zt apply <file>              apply a zt.yaml manifest on this machine
   zt watchdog enable           auto-recover from QUIC→HTTP2 fallback
@@ -55,10 +58,39 @@ func main() {
 
 	reorderArgs(os.Args, rootCmd)
 
+	// Handled directly rather than left to cobra's built-in --version flag
+	// so both "zt --version" and "zt version" (the latter is what the
+	// Homebrew formula test invokes) go through one path that also does
+	// the update check — see printVersion.
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+		printVersion()
+		return
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
+}
+
+// printVersion prints the running version and, unless ZT_NO_UPDATE_CHECK is
+// set, does a best-effort check for a newer release. The check is silent on
+// any failure (offline machine, GitHub unreachable, rate limited) — cfzt is
+// meant to work fine without ever phoning home, so this can only add a
+// helpful line, never block or clutter the output.
+func printVersion() {
+	fmt.Printf("zt version %s\n", version)
+
+	if os.Getenv("ZT_NO_UPDATE_CHECK") != "" {
+		return
+	}
+	info, err := release.CheckLatest(version)
+	if err != nil || info == nil || !info.Available {
+		return
+	}
+	warnFn := color.New(color.FgYellow).SprintFunc()
+	fmt.Printf("  %s a newer version is available: %s (you have %s)\n", warnFn("!"), info.Latest, info.Current)
+	fmt.Printf("     upgrade: %s\n", info.URL)
 }
 
 // tunnelNameFirstCmds are the subcommands whose only positional argument is

@@ -448,6 +448,19 @@ zt doctor
   ✓ all checks passed
 ```
 
+### Checking your version
+
+```bash
+zt version
+# or: zt --version
+```
+
+Both print the running version and, unless `ZT_NO_UPDATE_CHECK=1` is set,
+do a quick (1.5s timeout) check against GitHub for a newer release —
+silently skipped if there's no network, since zt is meant to work fine
+offline. `zt doctor` does the same check and surfaces it alongside the
+rest of the system report.
+
 ---
 
 ## Flags

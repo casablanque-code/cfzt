@@ -9,6 +9,7 @@ import (
 
 	"github.com/casablanque-code/cfzt/config"
 	"github.com/casablanque-code/cfzt/internal/cloudflared"
+	"github.com/casablanque-code/cfzt/internal/release"
 	"github.com/casablanque-code/cfzt/internal/service"
 	"github.com/casablanque-code/cfzt/internal/state"
 	"github.com/fatih/color"
@@ -107,6 +108,17 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 					dim("hint:"))
 			}
 			problems++
+		}
+	}
+
+	// 1b. cfzt itself up to date — best-effort, silent on any failure
+	// (offline machine, GitHub unreachable) so this can only ever add a
+	// helpful line, never break doctor's own output. Opt out entirely
+	// with ZT_NO_UPDATE_CHECK.
+	if os.Getenv("ZT_NO_UPDATE_CHECK") == "" {
+		if info, err := release.CheckLatest(version); err == nil && info.Available {
+			fmt.Printf("  %s  zt %s available (you're on %s)\n", warn("!"), info.Latest, info.Current)
+			fmt.Printf("     %s %s\n", dim("hint:"), info.URL)
 		}
 	}
 

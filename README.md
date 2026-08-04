@@ -31,7 +31,7 @@ real HTTPS URL with login, instead of leaving it on `localhost` or opening a
 port:
 
 ```bash
-zt up grafana 3000 --docker
+zt up grafana 3000 --docker --allow you@example.com
 zt up open-webui 8080 --docker --allow you@example.com
 ```
 
@@ -48,7 +48,7 @@ review, and tear it down when the PR closes:
 ```mermaid
 flowchart LR
     A[PR opened] --> B[CI builds & starts container<br/>localhost:3000]
-    B --> C["zt up pr-142 3000 --docker"]
+    B --> C["zt up pr-142 3000 --docker --public"]
     C --> D[https://pr-142.example.com]
     E[PR closed] --> F["zt down pr-142"]
     F --> G[Tunnel, DNS, Access all removed]
@@ -56,7 +56,10 @@ flowchart LR
 
 ```bash
 # on PR open, in CI, after the container is up on localhost:3000
-zt up pr-142 3000 --docker
+# --public: preview links need to be viewable without a Cloudflare Access
+# login, same as a Vercel/Netlify preview URL — swap in --allow if your
+# previews should stay restricted to your team
+zt up pr-142 3000 --docker --public
 
 # on PR close
 zt down pr-142
@@ -262,8 +265,13 @@ You will be prompted for three values:
 ### Bring up a tunnel
 
 ```bash
-zt up <name> <port>
+zt up <name> <port> --allow you@example.com
+# or: zt up <name> <port> --public
 ```
+
+`--allow` or `--public` is required — `zt` always makes you choose
+explicitly whether a service needs a login or not; there's no implicit
+default.
 
 ```bash
 # Restrict access to specific email (Cloudflare sends OTP to that address)
@@ -273,19 +281,13 @@ zt up portainer 9000 --allow you@example.com
 zt up vault 8200 --allow alice@example.com --allow bob@example.com
 
 # Auto-detect port from a running Docker container
-zt up portainer --docker
-
-# Docker + email restriction
 zt up portainer --docker --allow you@example.com
 
 # No Zero Trust gate — public access, no Access app created
 zt up api 8080 --public
 
-# ZT Access app created but bypass policy (no login required)
-zt up grafana 3000
-
 # Force TCP if QUIC is blocked by your ISP
-zt up portainer 9000 --tcp
+zt up portainer 9000 --allow you@example.com --tcp
 ```
 
 The service becomes available at `https://<name>.<domain>`.
@@ -469,6 +471,8 @@ zt doctor
 | `status` | Show whether the watchdog is running |
 
 ### `zt up`
+
+One of `--allow` or `--public` is required.
 
 | Flag | Description |
 |---|---|

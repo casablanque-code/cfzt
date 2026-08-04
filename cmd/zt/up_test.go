@@ -29,6 +29,29 @@ func TestCreateTunnel_InvalidProtocol(t *testing.T) {
 	}
 }
 
+func TestCreateTunnel_NoAccessPolicy(t *testing.T) {
+	err := createTunnel(tunnelOpts{name: "grafana", port: "3000", protocol: "auto"})
+	if err == nil {
+		t.Fatal("createTunnel() = nil error, want an error when neither --allow nor --public is set")
+	}
+	if !strings.Contains(err.Error(), "--allow") || !strings.Contains(err.Error(), "--public") {
+		t.Errorf("createTunnel() error = %q, want it to mention both --allow and --public", err.Error())
+	}
+}
+
+func TestCreateTunnel_PublicAndAllowConflict(t *testing.T) {
+	err := createTunnel(tunnelOpts{
+		name: "grafana", port: "3000", protocol: "auto",
+		public: true, emails: []string{"you@example.com"},
+	})
+	if err == nil {
+		t.Fatal("createTunnel() = nil error, want an error when --public and --allow are combined")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("createTunnel() error = %q, want it to say --public/--allow are mutually exclusive", err.Error())
+	}
+}
+
 // TestCreateTunnel_AlreadyExists covers the "tunnel already exists" guard,
 // which returns before createTunnel ever constructs a Cloudflare API
 // client — safe to run without any network access.
@@ -47,7 +70,7 @@ func TestCreateTunnel_AlreadyExists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = createTunnel(tunnelOpts{name: "grafana", port: "3001", protocol: "auto"})
+	err = createTunnel(tunnelOpts{name: "grafana", port: "3001", protocol: "auto", public: true})
 	if err == nil {
 		t.Fatal("createTunnel() = nil error, want an error for a tunnel that already exists")
 	}

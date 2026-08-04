@@ -123,6 +123,15 @@ func createTunnel(opts tunnelOpts) error {
 		return fmt.Errorf("invalid protocol %q — use: auto, quic, http2", opts.protocol)
 	}
 
+	if !opts.public && len(opts.emails) == 0 {
+		return fmt.Errorf(`no access policy specified — choose one:
+  --allow <email>   restrict access to specific emails (repeatable)
+  --public          skip Zero Trust Access entirely (public, no auth)`)
+	}
+	if opts.public && len(opts.emails) > 0 {
+		return fmt.Errorf("--public and --allow are mutually exclusive — --public skips Access entirely, so there's no policy for --allow to restrict")
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		return err

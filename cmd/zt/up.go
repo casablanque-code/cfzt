@@ -217,13 +217,12 @@ func createTunnel(opts tunnelOpts) error {
 			rollback(dnsRecordID, accessAppID)
 			return err
 		}
-		policyDesc := "bypass (public)"
-		if len(opts.emails) > 0 {
-			policyDesc = fmt.Sprintf("allow %s", strings.Join(opts.emails, ", "))
-		}
-		fmt.Printf("     %s access policy: %s\n", okFn("✓"), policyDesc)
+		// opts.emails is always non-empty here — createTunnel's earlier
+		// check requires --allow whenever --public isn't set.
+		fmt.Printf("     %s access policy: allow %s\n", okFn("✓"), strings.Join(opts.emails, ", "))
 	} else {
-		fmt.Printf("     %s skipping ZT Access (--public flag)\n", okFn("✓"))
+		fmt.Printf("     %s %s no Zero Trust Access — %s will be reachable by anyone with the link\n",
+			warnFn("!"), warnFn("public:"), hostname)
 	}
 
 	// 6. Write cloudflared config

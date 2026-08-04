@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `zt up` (and `zt apply`) now requires either `--allow <email>` or `--public` — omitting both used to still create a Zero Trust Access application, but with an empty `--allow` list it got a bypass policy with an `Everyone` include rule, which disables Access enforcement entirely. In practice `zt up grafana 3000` and `zt up grafana 3000 --public` granted the same unauthenticated public access, contradicting the "Zero Trust" pitch. Any script or CI job calling `zt up` without an access flag needs one added
+- `zt up`'s DNS upsert no longer deletes *any* pre-existing record with the target hostname — only a record that looks like zt's own (a CNAME to `*.cfargotunnel.com`, e.g. a stale tunnel from a previous run) is replaced automatically. A real A/AAAA record or a CNAME to something else is left alone and `zt up` refuses with an explanation; pass the new `--force` flag (also available as `force:` in `zt.yaml` manifests) to replace it anyway
+- `--public` now prints a visible warning naming the hostname instead of a plain checkmark, so it's harder to miss scrolling past — chosen over a blocking confirmation prompt specifically so scripted/CI use (e.g. PR preview environments) isn't interrupted
+
+### Added
+
+- `zt version` (and `zt --version`) now checks GitHub for a newer release and prints an upgrade hint if one's available; `zt doctor` surfaces the same check as an informational line. Best-effort and silent on any failure (offline, GitHub unreachable) — opt out entirely with `ZT_NO_UPDATE_CHECK=1`
+
 ### Fixed
 
 - `doctor` no longer claims "systemd linger enabled" on macOS/Windows — that check is hardcoded to always pass there (LaunchAgents and logon-trigger scheduled tasks already auto-start, there's no separate linger toggle), so the message was simply false on those platforms. Now reports what's actually being confirmed ("systemd"/"launchd"/"scheduled task" configured to auto-start at login), via the same `service.ManagerName()` used elsewhere

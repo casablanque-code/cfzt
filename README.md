@@ -16,16 +16,6 @@ zt up portainer --docker --allow you@example.com
 ```
 ![zt demo](demo.gif)
 
-```mermaid
-flowchart LR
-    A[Docker / local service] --> B(zt)
-    B --> C[Cloudflare Tunnel]
-    B --> D[DNS]
-    B --> E[Access]
-    B --> F[Lifecycle<br/>systemd / LaunchAgent / Task Scheduler]
-    C & D & E & F --> G[https://name.example.com]
-```
-
 `zt up <name> <port>` creates the tunnel, ingress rules, DNS record, and
 Access policy, and installs it as a service that survives reboots. `zt down
 <name>` removes everything it created. See [What it does](#what-it-does) for
@@ -89,6 +79,16 @@ deployments UI automatically is planned — see the issue tracker.
 5. Installs and starts a systemd (Linux), LaunchAgent (macOS), or Task
    Scheduler (Windows) service
 6. Saves state locally
+
+```mermaid
+flowchart LR
+    A[Docker / local service] --> B(zt)
+    B --> C[Cloudflare Tunnel]
+    B --> D[DNS]
+    B --> E[Access]
+    B --> F[Lifecycle<br/>systemd / LaunchAgent / Task Scheduler]
+    C & D & E & F --> G[https://name.example.com]
+```
 
 `zt down <name>` attempts to remove all created resources.
 

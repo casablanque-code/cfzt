@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/casablanque-code/cfzt/config"
@@ -15,6 +16,37 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
+
+// recreateUpFlags reconstructs the --allow/--public flags this tunnel was
+// created with, so doctor's "zt down && zt up" recovery hints are commands
+// that will actually succeed. zt up now requires --allow or --public (see
+// the access-policy fix in v0.8.0) — a bare "zt up <name> <port>" hint
+// would just fail with "no access policy specified" instead of fixing
+// anything. forceTCP appends --tcp regardless of the tunnel's current
+// protocol, for hints that are specifically suggesting a switch to TCP.
+func recreateUpFlags(t *state.Tunnel, forceTCP bool) string {
+	var parts []string
+	if t.Public {
+		parts = append(parts, "--public")
+	} else {
+		for _, e := range t.AllowEmails {
+			parts = append(parts, "--allow "+e)
+		}
+	}
+	if forceTCP || t.Protocol == state.ProtocolHTTP2 {
+		parts = append(parts, "--tcp")
+	}
+	return strings.Join(parts, " ")
+}
+
+// recreateHint builds the full "run: zt down X && zt up X <port> <flags>"
+// recovery hint text for a tunnel, trimmed of any trailing space when
+// recreateUpFlags has nothing to add (e.g. a --public tunnel needs no
+// --allow list).
+func recreateHint(t *state.Tunnel, forceTCP bool) string {
+	return strings.TrimSpace(fmt.Sprintf("run: zt down %s && zt up %s %d %s",
+		t.Name, t.Name, t.Port, recreateUpFlags(t, forceTCP)))
+}
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
@@ -204,12 +236,12 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 					procErr = fmt.Errorf("cloudflared process (pid %d) is not running", t.PID)
 				}
 				if !check(fmt.Sprintf("cloudflared running (pid %d)", t.PID), procErr,
-					fmt.Sprintf("run: zt down %s && zt up %s %d", t.Name, t.Name, t.Port)) {
+					recreateHint(t, false)) {
 					problems++
 				}
 			} else {
 				check("cloudflared process", fmt.Errorf("no service or PID found"),
-					fmt.Sprintf("run: zt down %s && zt up %s %d", t.Name, t.Name, t.Port))
+					recreateHint(t, false))
 				problems++
 			}
 
@@ -232,7 +264,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			cfStatus, cfErr := cf.GetTunnelStatus(t.TunnelID)
 			if cfErr != nil {
 				if !check("Cloudflare tunnel reachable", cfErr,
-					fmt.Sprintf("run: zt down %s && zt up %s %d", t.Name, t.Name, t.Port)) {
+					recreateHint(t, false)) {
 					problems++
 				}
 			} else {
@@ -243,17 +275,15 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 					fmt.Printf("  %s  Cloudflare tunnel status: %s — some edge connections lost\n", warn("!"), cfStatus)
 					if t.Protocol == state.ProtocolHTTP2 {
 						// already on TCP — suggest reconnect
-						fmt.Printf("     %s already using TCP, try reconnecting: zt down %s && zt up %s %d --tcp\n",
-							dim("hint:"), t.Name, t.Name, t.Port)
+						fmt.Printf("     %s already using TCP, try reconnecting: %s\n", dim("hint:"), recreateHint(t, true))
 					} else {
 						// suggest switching to TCP
-						fmt.Printf("     %s QUIC may be blocked, try: zt down %s && zt up %s %d --tcp\n",
-							dim("hint:"), t.Name, t.Name, t.Port)
+						fmt.Printf("     %s QUIC may be blocked, try: %s\n", dim("hint:"), recreateHint(t, true))
 					}
 					problems++
 				default:
 					fmt.Printf("  %s  Cloudflare tunnel status: %s\n", fail("✗"), cfStatus)
-					fmt.Printf("     %s run: zt down %s && zt up %s %d\n", dim("hint:"), t.Name, t.Name, t.Port)
+					fmt.Printf("     %s %s\n", dim("hint:"), recreateHint(t, false))
 					problems++
 				}
 			}

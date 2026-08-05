@@ -32,6 +32,10 @@ func TestReorderArgs(t *testing.T) {
 		{"leading flag not touched", []string{"zt", "--help", "status"}, []string{"zt", "--help", "status"}},
 		{"alias recognized as known command", []string{"zt", "ls", "status"}, []string{"zt", "ls", "status"}},
 		{"too short is a no-op", []string{"zt", "status"}, []string{"zt", "status"}},
+		{"__complete invocation untouched (regression: broke shell tab-completion)",
+			[]string{"zt", "__complete", "down", ""}, []string{"zt", "__complete", "down", ""}},
+		{"__completeNoDesc invocation untouched",
+			[]string{"zt", "__completeNoDesc", "restart", ""}, []string{"zt", "__completeNoDesc", "restart", ""}},
 	}
 
 	for _, c := range cases {

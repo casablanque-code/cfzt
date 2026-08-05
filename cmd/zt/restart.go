@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/casablanque-code/cfzt/internal/cloudflared"
 	"github.com/casablanque-code/cfzt/internal/service"
@@ -74,8 +75,8 @@ func restartTunnel(name string) error {
 		}
 		fmt.Printf("     %s restarted (pid %d)\n", okFn("✓"), pid)
 	} else {
-		return fmt.Errorf("tunnel %q has no running process or service — run `zt down %s && zt up %s <port>`",
-			name, name, name)
+		hint := strings.TrimSpace(fmt.Sprintf("zt down %s && zt up %s %d %s", name, name, t.Port, recreateUpFlags(t, false)))
+		return fmt.Errorf("tunnel %q has no running process or service — run `%s`", name, hint)
 	}
 
 	return nil

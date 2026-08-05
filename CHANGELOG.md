@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Windows:** Task Scheduler actions no longer go through `cmd.exe /c ... >> log 2>&1`. That wrapper meant every argument (cloudflared's path, the config path, the log path) was parsed three times before the real process saw it — Task Scheduler's XML, cmd.exe's own argument parsing, then cmd.exe re-parsing its `/c` string a second time — and was the root cause of tunnels that ran fine manually but failed under Task Scheduler with `Last Result: 1`. `zt up`/`zt watchdog enable` now register the task to call `zt.exe` directly via a new hidden `zt internal run` entrypoint, which opens the log file itself and execs the real command with real argv — one quoting layer instead of three
+- **Windows:** `zt up` and `zt watchdog enable` no longer report success the instant `schtasks /run` accepts the request — they now poll briefly (up to ~800ms) to confirm the task is actually still running, and fail with the tail of its log if it exited immediately. Previously a cloudflared that crashed on startup (bad config, port already bound, etc.) still looked like a fully successful `zt up`, showing as inactive only on a later `zt status`/`zt doctor`
+- **Windows:** `zt restart` gets the same immediate-crash detection as `zt up`
+
 ## [0.8.1] - 2026-08-05
 
 ### Fixed

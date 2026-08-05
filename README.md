@@ -309,9 +309,9 @@ zt list      # or: zt ls
 ```
 
 ```
-NAME        URL                             PORT   STATUS   MANAGED BY
-portainer   https://portainer.example.com   9000   running  systemd
-grafana     https://grafana.example.com     3000   stopped  pid 84291
+NAME        URL                             PORT   PROTOCOL      ACCESS         STATUS   MANAGED BY
+portainer   https://portainer.example.com   9000   auto (quic)   ZT (1 email)   running  systemd
+grafana     https://grafana.example.com     3000   http2 (TCP)   public         stopped  pid 84291
 ```
 
 ### Tunnel details
@@ -326,8 +326,9 @@ zt status portainer
   Port:       9000
   Tunnel ID:  07fc193d-d05e-48eb-bb00-22be71823b14
   Managed by: systemd
-  Status:     running
   Protocol:   http2 (TCP)
+  Access:     ZT (1 email)
+  Status:     running
   Created:    2026-05-27 00:01:08
   Log:        /root/.zt/tunnels/portainer/cloudflared.log
 ```

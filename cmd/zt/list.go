@@ -237,7 +237,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	})
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"NAME", "URL", "PORT", "STATUS", "MANAGED BY"})
+	table.SetHeader([]string{"NAME", "URL", "PORT", "PROTOCOL", "ACCESS", "STATUS", "MANAGED BY"})
 	table.SetBorder(false)
 	table.SetColumnSeparator("  ")
 	table.SetHeaderLine(false)
@@ -248,10 +248,13 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	for _, t := range tunnels {
 		status, managedBy := tunnelStatus(t)
+		path, _ := logPath(t.Name)
 		table.Append([]string{
 			t.Name,
 			"https://" + t.Hostname,
 			fmt.Sprintf("%d", t.Port),
+			protocolLabel(t.Protocol, path),
+			accessLabel(t),
 			status,
 			managedBy,
 		})
@@ -288,6 +291,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Tunnel ID:  %s\n", t.TunnelID)
 	fmt.Printf("  Managed by: %s\n", managedBy)
 	fmt.Printf("  Protocol:   %s\n", protocolLabel(t.Protocol, path))
+	fmt.Printf("  Access:     %s\n", accessLabel(t))
 	fmt.Printf("  Status:     %s\n", statusStr)
 	fmt.Printf("  Created:    %s\n", t.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Printf("  Log:        %s\n", path)
@@ -297,6 +301,25 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return printLogs(name, 30)
 	}
 	return nil
+}
+
+// accessLabel summarizes a tunnel's access policy for `zt list`/`zt status`:
+// "public" (--public, no Access app) or "ZT (N email)" (Access app with an
+// allow policy). See the P0 fix requiring --allow or --public on zt up —
+// there's no third "bypass" state anymore.
+func accessLabel(t *state.Tunnel) string {
+	yellow := color.New(color.FgYellow).SprintFunc()
+	green := color.New(color.FgGreen).SprintFunc()
+
+	if t.Public {
+		return yellow("public")
+	}
+	n := len(t.AllowEmails)
+	noun := "email"
+	if n != 1 {
+		noun = "emails"
+	}
+	return green(fmt.Sprintf("ZT (%d %s)", n, noun))
 }
 
 func protocolLabel(p state.Protocol, logPath string) string {

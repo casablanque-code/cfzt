@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf16"
 )
 
@@ -71,9 +72,9 @@ const watchdogTaskName = "zt-watchdog"
 //
 // description/cmd/args are XML-escaped before insertion. Without this,
 // any value containing an XML special character produces a task file
-// Windows rejects outright — the log-redirection wrapper's "2>&1", for
-// instance, has a bare '&' that made every Install()/InstallWatchdog()
-// call fail with "ERROR: The task XML is malformed."
+// Windows rejects outright — an unescaped '&' anywhere in an argument
+// (a path, a hostname, ...) makes every Install()/InstallWatchdog() call
+// fail with "ERROR: The task XML is malformed."
 func buildTaskXML(description, cmd string, args ...string) string {
 	quoted := make([]string, len(args))
 	for i, a := range args {
@@ -97,12 +98,31 @@ func xmlEscapeText(s string) string {
 // quoteArg wraps an argument in double quotes for the Task Scheduler
 // <Arguments> string, escaping any embedded double quotes. Paths on
 // Windows routinely contain spaces (Program Files, user profile dirs),
-// so unquoted arguments would be split incorrectly. This is cmd.exe/CRT
-// argument-quoting syntax, applied before the XML escaping in
-// buildTaskXML — the two operate on different layers and both are
-// needed.
+// so unquoted arguments would be split incorrectly. This is CRT
+// (CommandLineToArgvW) argument-quoting syntax, applied before the XML
+// escaping in buildTaskXML — the two operate on different layers and both
+// are needed. It's also the *only* quoting layer an argument passes
+// through: Task Scheduler invokes the Command directly (zt.exe, see
+// tunnelRunArgs/watchdogRunArgs below), not via cmd.exe, so there's no
+// second shell re-parsing the already-quoted string a second time.
 func quoteArg(a string) string {
 	return `"` + strings.ReplaceAll(a, `"`, `\"`) + `"`
+}
+
+// tunnelRunArgs builds the argv Task Scheduler uses to launch cloudflared
+// under `zt internal run` — zt opens the log file itself and execs bin
+// with real argv, so Task Scheduler never has to go through cmd.exe (and
+// its own argument re-parsing) just to redirect output to a file. See
+// cmd/zt/internal_run.go for the run side of this.
+func tunnelRunArgs(bin, configPath, logPath string) []string {
+	return []string{"internal", "run", "--log", logPath, "--", bin, "tunnel", "--config", configPath, "run"}
+}
+
+// watchdogRunArgs is tunnelRunArgs' counterpart for the watchdog task —
+// same wrapper, running `zt watchdog run` (which already writes its own
+// progress to stdout) as the child instead of cloudflared.
+func watchdogRunArgs(zt, logPath string) []string {
+	return []string{"internal", "run", "--log", logPath, "--", zt, "watchdog", "run"}
 }
 
 var setConsoleUTF8Once sync.Once
@@ -142,6 +162,50 @@ func accessDeniedHint(taskName string) string {
 func taskExists(name string) bool {
 	_, err := runSchtasks("/query", "/tn", name)
 	return err == nil
+}
+
+// taskStartupBackoff is the polling schedule used to confirm a
+// just-started task is still alive. schtasks /run only confirms Task
+// Scheduler accepted the request to launch the process — it returns
+// success immediately, before the process has had any chance to crash on
+// a bad config, a port already in use, a missing DLL, etc. Without this
+// check, Install()/InstallWatchdog() could report success (task
+// registered, schtasks /run succeeded) while the launched process is
+// already dead. The escalating delays keep the common case (a
+// successful, near-instant start) fast while still catching a slower
+// crash.
+var taskStartupBackoff = []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 500 * time.Millisecond}
+
+// waitForTaskRunning polls tn's state for up to taskStartupBackoff's total
+// span and reports whether it settled into Running.
+func waitForTaskRunning(tn string) bool {
+	for _, d := range taskStartupBackoff {
+		time.Sleep(d)
+		if taskIsRunning(tn) {
+			return true
+		}
+	}
+	return false
+}
+
+// tailLog returns the last n lines of the file at path, indented for
+// display, or a placeholder if it can't be read. Best-effort diagnostic
+// context for a task that died immediately after starting — not worth
+// failing over if the log itself isn't readable yet (e.g. cloudflared
+// crashed before ever opening it).
+func tailLog(path string, n int) string {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) == 0 {
+		return "  (no log output captured)"
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	for i, l := range lines {
+		lines[i] = "  " + l
+	}
+	return strings.Join(lines, "\n")
 }
 
 func cloudflaredBin() (string, error) {
@@ -205,17 +269,23 @@ func Install(name, configPath, logPath string) error {
 	if err != nil {
 		return err
 	}
-
-	inner := fmt.Sprintf(`"%s" tunnel --config "%s" run >> "%s" 2>&1`, bin, configPath, logPath)
-	xml := buildTaskXML("zt tunnel — "+name, "cmd.exe", "/c", inner)
-
-	if err := createTask(taskName(name), xml); err != nil {
-		return err
+	zt, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not determine zt binary path: %w", err)
 	}
 
 	tn := taskName(name)
+	xml := buildTaskXML("zt tunnel — "+name, zt, tunnelRunArgs(bin, configPath, logPath)...)
+
+	if err := createTask(tn, xml); err != nil {
+		return err
+	}
+
 	if out, err := runSchtasks("/run", "/tn", tn); err != nil {
 		return fmt.Errorf("task created but failed to start: schtasks /run: %w\n%s", err, out)
+	}
+	if !waitForTaskRunning(tn) {
+		return fmt.Errorf("cloudflared exited immediately after starting\n\nlog: %s\n%s\n\nrun:\n  zt logs %s", logPath, tailLog(logPath, 10), name)
 	}
 	return nil
 }
@@ -228,6 +298,9 @@ func Restart(name string) error {
 	out, err := runSchtasks("/run", "/tn", tn)
 	if err != nil {
 		return fmt.Errorf("schtasks /run: %w\n%s", err, out)
+	}
+	if !waitForTaskRunning(tn) {
+		return fmt.Errorf("cloudflared exited immediately after restarting — check what's wrong:\n  zt logs %s", name)
 	}
 	return nil
 }
@@ -281,14 +354,16 @@ func InstallWatchdog(logPath string) error {
 		return fmt.Errorf("could not determine zt binary path: %w", err)
 	}
 
-	inner := fmt.Sprintf(`"%s" watchdog run >> "%s" 2>&1`, exe, logPath)
-	xml := buildTaskXML("zt QUIC/HTTP2 fallback watchdog", "cmd.exe", "/c", inner)
+	xml := buildTaskXML("zt QUIC/HTTP2 fallback watchdog", exe, watchdogRunArgs(exe, logPath)...)
 
 	if err := createTask(watchdogTaskName, xml); err != nil {
 		return err
 	}
 	if out, err := runSchtasks("/run", "/tn", watchdogTaskName); err != nil {
 		return fmt.Errorf("task created but failed to start: schtasks /run: %w\n%s", err, out)
+	}
+	if !waitForTaskRunning(watchdogTaskName) {
+		return fmt.Errorf("watchdog exited immediately after starting\n\nlog: %s\n%s\n\nrun:\n  zt watchdog status", logPath, tailLog(logPath, 10))
 	}
 	return nil
 }

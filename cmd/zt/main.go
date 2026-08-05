@@ -43,6 +43,18 @@ See "zt <command> --help" for full flags on any command.`,
 	SilenceErrors: true,
 }
 
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Show the running version",
+	// A plain command (not printVersion's --version shortcut) so cobra's
+	// own tab-completion machinery knows "version" exists — see
+	// reorderArgs' __complete handling for why that matters.
+	RunE: func(cmd *cobra.Command, args []string) error {
+		printVersion()
+		return nil
+	},
+}
+
 func main() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(upCmd)
@@ -52,17 +64,18 @@ func main() {
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(exportCmd)
 	rootCmd.AddCommand(applyCmd)
 	rootCmd.AddCommand(watchdogCmd)
 
 	reorderArgs(os.Args, rootCmd)
 
-	// Handled directly rather than left to cobra's built-in --version flag
-	// so both "zt --version" and "zt version" (the latter is what the
-	// Homebrew formula test invokes) go through one path that also does
-	// the update check — see printVersion.
-	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+	// --version specifically is handled here rather than left to cobra's
+	// built-in version flag, so it goes through the same printVersion (and
+	// its update check) as the "zt version" subcommand above instead of
+	// cobra's plain built-in template.
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
 		printVersion()
 		return
 	}
@@ -112,6 +125,17 @@ func reorderArgs(args []string, root *cobra.Command) {
 	if len(args) < 3 {
 		return
 	}
+	// Shell tab-completion invokes the binary as "zt __complete down d" (or
+	// __completeNoDesc) — cobra's own hidden completion commands, not user
+	// input. args[2] there is often the partial word being completed,
+	// which can collide with tunnelNameFirstCmds (e.g. completing "zt
+	// __complete down ''" has second == "down"), and swapping it out from
+	// position 1 breaks the completion protocol entirely: shells stop
+	// offering suggestions with no visible error. Bail out before any of
+	// that logic runs.
+	if args[1] == "__complete" || args[1] == "__completeNoDesc" {
+		return
+	}
 	first, second := args[1], args[2]
 	if strings.HasPrefix(first, "-") {
 		return
@@ -128,7 +152,8 @@ func reorderArgs(args []string, root *cobra.Command) {
 // isKnownSubcommand reports whether name matches a registered subcommand's
 // Use token, an alias, or the built-in help/completion commands.
 func isKnownSubcommand(root *cobra.Command, name string) bool {
-	if name == "help" || name == "completion" || name == "--help" || name == "-h" {
+	if name == "help" || name == "completion" || name == "--help" || name == "-h" ||
+		name == "__complete" || name == "__completeNoDesc" {
 		return true
 	}
 	for _, c := range root.Commands() {

@@ -4,6 +4,7 @@ package service
 
 import (
 	"encoding/xml"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -146,6 +147,45 @@ func TestWatchdogRunArgs(t *testing.T) {
 			t.Errorf("watchdogRunArgs()[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
+}
+
+func TestTailLog(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("missing file", func(t *testing.T) {
+		if got := tailLog(filepath.Join(dir, "does-not-exist.log"), 10); got != "  (no log output captured)" {
+			t.Errorf("tailLog() = %q, want the placeholder for a missing file", got)
+		}
+	})
+
+	t.Run("fewer lines than n", func(t *testing.T) {
+		p := filepath.Join(dir, "short.log")
+		if err := os.WriteFile(p, []byte("one\ntwo\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got := tailLog(p, 10)
+		if !strings.Contains(got, "one") || !strings.Contains(got, "two") {
+			t.Errorf("tailLog() = %q, want it to contain all lines when there are fewer than n", got)
+		}
+	})
+
+	t.Run("more lines than n keeps only the tail", func(t *testing.T) {
+		p := filepath.Join(dir, "long.log")
+		var lines []string
+		for i := 1; i <= 20; i++ {
+			lines = append(lines, fmt.Sprintf("line%02d", i))
+		}
+		if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got := tailLog(p, 5)
+		if strings.Contains(got, lines[0]) {
+			t.Errorf("tailLog(n=5) = %q, should not contain the first line of a 20-line file", got)
+		}
+		if !strings.Contains(got, lines[len(lines)-1]) {
+			t.Errorf("tailLog(n=5) = %q, should contain the last line", got)
+		}
+	})
 }
 
 // fakeExecutable creates a file at dir/name.exe that exec.LookPath will

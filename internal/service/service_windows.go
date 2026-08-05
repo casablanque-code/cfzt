@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf16"
 )
 
@@ -163,6 +164,50 @@ func taskExists(name string) bool {
 	return err == nil
 }
 
+// taskStartupBackoff is the polling schedule used to confirm a
+// just-started task is still alive. schtasks /run only confirms Task
+// Scheduler accepted the request to launch the process — it returns
+// success immediately, before the process has had any chance to crash on
+// a bad config, a port already in use, a missing DLL, etc. Without this
+// check, Install()/InstallWatchdog() could report success (task
+// registered, schtasks /run succeeded) while the launched process is
+// already dead. The escalating delays keep the common case (a
+// successful, near-instant start) fast while still catching a slower
+// crash.
+var taskStartupBackoff = []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 500 * time.Millisecond}
+
+// waitForTaskRunning polls tn's state for up to taskStartupBackoff's total
+// span and reports whether it settled into Running.
+func waitForTaskRunning(tn string) bool {
+	for _, d := range taskStartupBackoff {
+		time.Sleep(d)
+		if taskIsRunning(tn) {
+			return true
+		}
+	}
+	return false
+}
+
+// tailLog returns the last n lines of the file at path, indented for
+// display, or a placeholder if it can't be read. Best-effort diagnostic
+// context for a task that died immediately after starting — not worth
+// failing over if the log itself isn't readable yet (e.g. cloudflared
+// crashed before ever opening it).
+func tailLog(path string, n int) string {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) == 0 {
+		return "  (no log output captured)"
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	for i, l := range lines {
+		lines[i] = "  " + l
+	}
+	return strings.Join(lines, "\n")
+}
+
 func cloudflaredBin() (string, error) {
 	path, err := exec.LookPath("cloudflared")
 	if err != nil {
@@ -239,6 +284,9 @@ func Install(name, configPath, logPath string) error {
 	if out, err := runSchtasks("/run", "/tn", tn); err != nil {
 		return fmt.Errorf("task created but failed to start: schtasks /run: %w\n%s", err, out)
 	}
+	if !waitForTaskRunning(tn) {
+		return fmt.Errorf("cloudflared exited immediately after starting\n\nlog: %s\n%s\n\nrun:\n  zt logs %s", logPath, tailLog(logPath, 10), name)
+	}
 	return nil
 }
 
@@ -250,6 +298,9 @@ func Restart(name string) error {
 	out, err := runSchtasks("/run", "/tn", tn)
 	if err != nil {
 		return fmt.Errorf("schtasks /run: %w\n%s", err, out)
+	}
+	if !waitForTaskRunning(tn) {
+		return fmt.Errorf("cloudflared exited immediately after restarting — check what's wrong:\n  zt logs %s", name)
 	}
 	return nil
 }
@@ -310,6 +361,9 @@ func InstallWatchdog(logPath string) error {
 	}
 	if out, err := runSchtasks("/run", "/tn", watchdogTaskName); err != nil {
 		return fmt.Errorf("task created but failed to start: schtasks /run: %w\n%s", err, out)
+	}
+	if !waitForTaskRunning(watchdogTaskName) {
+		return fmt.Errorf("watchdog exited immediately after starting\n\nlog: %s\n%s\n\nrun:\n  zt watchdog status", logPath, tailLog(logPath, 10))
 	}
 	return nil
 }

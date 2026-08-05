@@ -188,9 +188,18 @@ func createTask(name, xml string) error {
 }
 
 // Install registers a Task Scheduler task that runs cloudflared at user
-// logon and restarts it on failure. Stdout/stderr are redirected to
-// logPath via a cmd.exe wrapper since Task Scheduler actions have no
-// native output-redirection field.
+// logon and restarts it on failure, then starts it immediately.
+//
+// A LogonTrigger only fires at the *next* logon — since `zt up` is
+// normally run from an already-logged-in session, the task would
+// otherwise sit in "Ready" state, never actually launching cloudflared,
+// until the next reboot/logon. That's silent: schtasks /create succeeds
+// either way, so without this the tunnel looks fully set up (DNS, ingress,
+// task registered) while nothing is actually listening — `zt doctor` and
+// `zt status` would report it as inactive right after a successful-looking
+// `zt up`. This mirrors `systemctl --user enable --now` on Linux and
+// LaunchAgent's immediate load on macOS, both of which start the service
+// as part of Install(), not just register it.
 func Install(name, configPath, logPath string) error {
 	bin, err := cloudflaredBin()
 	if err != nil {
@@ -200,7 +209,15 @@ func Install(name, configPath, logPath string) error {
 	inner := fmt.Sprintf(`"%s" tunnel --config "%s" run >> "%s" 2>&1`, bin, configPath, logPath)
 	xml := buildTaskXML("zt tunnel — "+name, "cmd.exe", "/c", inner)
 
-	return createTask(taskName(name), xml)
+	if err := createTask(taskName(name), xml); err != nil {
+		return err
+	}
+
+	tn := taskName(name)
+	if out, err := runSchtasks("/run", "/tn", tn); err != nil {
+		return fmt.Errorf("task created but failed to start: schtasks /run: %w\n%s", err, out)
+	}
+	return nil
 }
 
 // Restart stops and re-runs the task immediately (RestartOnFailure only
@@ -255,6 +272,9 @@ func Description(name string) string {
 // generic status/error messages that shouldn't hardcode "systemd".
 func ManagerName() string { return "scheduled task" }
 
+// InstallWatchdog registers and immediately starts the watchdog task —
+// see Install's comment on why a LogonTrigger task needs an explicit
+// /run after /create to actually be running, not just registered.
 func InstallWatchdog(logPath string) error {
 	exe, err := os.Executable()
 	if err != nil {
@@ -264,7 +284,13 @@ func InstallWatchdog(logPath string) error {
 	inner := fmt.Sprintf(`"%s" watchdog run >> "%s" 2>&1`, exe, logPath)
 	xml := buildTaskXML("zt QUIC/HTTP2 fallback watchdog", "cmd.exe", "/c", inner)
 
-	return createTask(watchdogTaskName, xml)
+	if err := createTask(watchdogTaskName, xml); err != nil {
+		return err
+	}
+	if out, err := runSchtasks("/run", "/tn", watchdogTaskName); err != nil {
+		return fmt.Errorf("task created but failed to start: schtasks /run: %w\n%s", err, out)
+	}
+	return nil
 }
 
 // UninstallWatchdog removes the watchdog task. Missing task is a no-op.

@@ -5,7 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.1] - 2026-08-05
+
+### Fixed
+
+- `zt doctor` and `zt restart` recovery hints ("run: zt down X && zt up X ...") now reconstruct the tunnel's actual `--allow`/`--public`/`--tcp` flags instead of printing a bare `zt up <name> <port>` — which failed outright after v0.8.0 made an access-policy flag required
+- **Windows:** `zt up`'s scheduled task now actually starts immediately instead of only being registered to start at the next logon — previously `zt up` reported success (DNS, ingress, service all created) while cloudflared never actually launched, showing as an inactive tunnel in `zt status`/`zt doctor` right after a clean `zt up`
+- Shell tab-completion for `zt down`/`status`/`restart`/`logs` was silently broken — argument reordering meant to support `zt <name> down` was corrupting cobra's internal completion protocol
+
+### Added
+
+- `zt list` and `zt status` now show each tunnel's protocol and access policy (public vs. Zero Trust with email count)
+
+## [0.8.0] - 2026-08-04
 
 ### Changed
 

@@ -71,9 +71,9 @@ const watchdogTaskName = "zt-watchdog"
 //
 // description/cmd/args are XML-escaped before insertion. Without this,
 // any value containing an XML special character produces a task file
-// Windows rejects outright — the log-redirection wrapper's "2>&1", for
-// instance, has a bare '&' that made every Install()/InstallWatchdog()
-// call fail with "ERROR: The task XML is malformed."
+// Windows rejects outright — an unescaped '&' anywhere in an argument
+// (a path, a hostname, ...) makes every Install()/InstallWatchdog() call
+// fail with "ERROR: The task XML is malformed."
 func buildTaskXML(description, cmd string, args ...string) string {
 	quoted := make([]string, len(args))
 	for i, a := range args {
@@ -97,12 +97,31 @@ func xmlEscapeText(s string) string {
 // quoteArg wraps an argument in double quotes for the Task Scheduler
 // <Arguments> string, escaping any embedded double quotes. Paths on
 // Windows routinely contain spaces (Program Files, user profile dirs),
-// so unquoted arguments would be split incorrectly. This is cmd.exe/CRT
-// argument-quoting syntax, applied before the XML escaping in
-// buildTaskXML — the two operate on different layers and both are
-// needed.
+// so unquoted arguments would be split incorrectly. This is CRT
+// (CommandLineToArgvW) argument-quoting syntax, applied before the XML
+// escaping in buildTaskXML — the two operate on different layers and both
+// are needed. It's also the *only* quoting layer an argument passes
+// through: Task Scheduler invokes the Command directly (zt.exe, see
+// tunnelRunArgs/watchdogRunArgs below), not via cmd.exe, so there's no
+// second shell re-parsing the already-quoted string a second time.
 func quoteArg(a string) string {
 	return `"` + strings.ReplaceAll(a, `"`, `\"`) + `"`
+}
+
+// tunnelRunArgs builds the argv Task Scheduler uses to launch cloudflared
+// under `zt internal run` — zt opens the log file itself and execs bin
+// with real argv, so Task Scheduler never has to go through cmd.exe (and
+// its own argument re-parsing) just to redirect output to a file. See
+// cmd/zt/internal_run.go for the run side of this.
+func tunnelRunArgs(bin, configPath, logPath string) []string {
+	return []string{"internal", "run", "--log", logPath, "--", bin, "tunnel", "--config", configPath, "run"}
+}
+
+// watchdogRunArgs is tunnelRunArgs' counterpart for the watchdog task —
+// same wrapper, running `zt watchdog run` (which already writes its own
+// progress to stdout) as the child instead of cloudflared.
+func watchdogRunArgs(zt, logPath string) []string {
+	return []string{"internal", "run", "--log", logPath, "--", zt, "watchdog", "run"}
 }
 
 var setConsoleUTF8Once sync.Once
@@ -205,15 +224,18 @@ func Install(name, configPath, logPath string) error {
 	if err != nil {
 		return err
 	}
-
-	inner := fmt.Sprintf(`"%s" tunnel --config "%s" run >> "%s" 2>&1`, bin, configPath, logPath)
-	xml := buildTaskXML("zt tunnel — "+name, "cmd.exe", "/c", inner)
-
-	if err := createTask(taskName(name), xml); err != nil {
-		return err
+	zt, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not determine zt binary path: %w", err)
 	}
 
 	tn := taskName(name)
+	xml := buildTaskXML("zt tunnel — "+name, zt, tunnelRunArgs(bin, configPath, logPath)...)
+
+	if err := createTask(tn, xml); err != nil {
+		return err
+	}
+
 	if out, err := runSchtasks("/run", "/tn", tn); err != nil {
 		return fmt.Errorf("task created but failed to start: schtasks /run: %w\n%s", err, out)
 	}
@@ -281,8 +303,7 @@ func InstallWatchdog(logPath string) error {
 		return fmt.Errorf("could not determine zt binary path: %w", err)
 	}
 
-	inner := fmt.Sprintf(`"%s" watchdog run >> "%s" 2>&1`, exe, logPath)
-	xml := buildTaskXML("zt QUIC/HTTP2 fallback watchdog", "cmd.exe", "/c", inner)
+	xml := buildTaskXML("zt QUIC/HTTP2 fallback watchdog", exe, watchdogRunArgs(exe, logPath)...)
 
 	if err := createTask(watchdogTaskName, xml); err != nil {
 		return err

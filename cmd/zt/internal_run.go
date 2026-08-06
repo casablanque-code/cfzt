@@ -51,10 +51,13 @@ func init() {
 	internalRunCmd.Flags().StringVar(&internalRunLogPath, "log", "", "path to append the command's stdout/stderr to")
 	_ = internalRunCmd.MarkFlagRequired("log")
 	internalCmd.AddCommand(internalRunCmd)
-	rootCmd.AddCommand(internalCmd)
+	// internalCmd itself is registered on rootCmd in main() (main.go),
+	// alongside the rest of the command-group wiring.
 }
 
 func runInternalRun(cmd *cobra.Command, args []string) error {
+	hideOwnConsoleWindow()
+
 	logFile, err := os.OpenFile(internalRunLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		return fmt.Errorf("zt internal run: failed to open log file %q: %w", internalRunLogPath, err)
@@ -65,6 +68,7 @@ func runInternalRun(cmd *cobra.Command, args []string) error {
 	child.Stdout = logFile
 	child.Stderr = logFile
 	child.Stdin = nil
+	configureChildForBackground(child)
 
 	runErr := child.Run()
 	if runErr == nil {

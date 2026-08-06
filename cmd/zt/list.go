@@ -228,7 +228,7 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	tunnels := store.All()
 	if len(tunnels) == 0 {
-		fmt.Println("  no tunnels — run `zt up <name> <port>` to create one")
+		fmt.Println("  no tunnels — run `zt up <name> <port> --allow you@example.com` to create one")
 		return nil
 	}
 

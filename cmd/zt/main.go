@@ -20,23 +20,13 @@ var rootCmd = &cobra.Command{
 	Short:   "Zero Trust tunnel manager for Cloudflare",
 	Long: `zt — bring up Zero Trust tunnels with a single command.
 
-  zt init                      configure API credentials
-  zt up <name> <port>          expose a local service
-  zt down <name>               tear down a tunnel
-  zt restart <name>            restart cloudflared for a tunnel
-  zt list                      list active tunnels
-  zt status <name>             show tunnel details
-  zt logs <name>               show cloudflared logs
-  zt doctor                    check system and tunnel health
-  zt version                   show the running version
-  zt export [-o zt.yaml]       export managed tunnels to a portable manifest
-  zt apply <file>              apply a zt.yaml manifest on this machine
-  zt watchdog enable           auto-recover from QUIC→HTTP2 fallback
+  zt init
+  zt up <name> <port> --allow you@example.com
 
 Tips:
-  zt up <name> <port> --tcp    force TCP/http2 if QUIC/UDP is blocked
+  zt up <name> <port> --public   skip Zero Trust — anyone with the URL can reach it
+  zt up <name> <port> --tcp      force TCP/http2 if QUIC/UDP is blocked
   zt status <name> works as "zt <name> status" too
-  zt completion bash|zsh|fish|powershell   shell tab-completion (see --help)
 
 See "zt <command> --help" for full flags on any command.`,
 	SilenceUsage:  true,
@@ -55,19 +45,46 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+// Command groups control how "zt --help" lists subcommands: everything
+// with a matching GroupID is printed together under that group's Title,
+// in the order the groups were registered, instead of cobra's default
+// single alphabetical "Available Commands:" block. This is presentation
+// only — it has no effect on how a command is invoked or resolved.
+const (
+	groupCore     = "core"
+	groupManifest = "manifest"
+	groupSystem   = "system"
+)
+
 func main() {
-	rootCmd.AddCommand(initCmd)
-	rootCmd.AddCommand(upCmd)
-	rootCmd.AddCommand(downCmd)
-	rootCmd.AddCommand(restartCmd)
-	rootCmd.AddCommand(listCmd)
-	rootCmd.AddCommand(statusCmd)
-	rootCmd.AddCommand(logsCmd)
-	rootCmd.AddCommand(doctorCmd)
-	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(exportCmd)
-	rootCmd.AddCommand(applyCmd)
-	rootCmd.AddCommand(watchdogCmd)
+	rootCmd.AddGroup(
+		&cobra.Group{ID: groupCore, Title: "Tunnel commands:"},
+		&cobra.Group{ID: groupManifest, Title: "Manifest commands:"},
+		&cobra.Group{ID: groupSystem, Title: "System:"},
+	)
+
+	for _, c := range []*cobra.Command{initCmd, upCmd, listCmd, statusCmd, doctorCmd, logsCmd, restartCmd, downCmd} {
+		c.GroupID = groupCore
+		rootCmd.AddCommand(c)
+	}
+	for _, c := range []*cobra.Command{exportCmd, applyCmd} {
+		c.GroupID = groupManifest
+		rootCmd.AddCommand(c)
+	}
+	for _, c := range []*cobra.Command{watchdogCmd, versionCmd} {
+		c.GroupID = groupSystem
+		rootCmd.AddCommand(c)
+	}
+	// cobra adds "help" and "completion" itself; without these two calls
+	// they'd land in an unlabeled "Additional Commands:" section instead
+	// of the System group above.
+	rootCmd.SetHelpCommandGroupID(groupSystem)
+	rootCmd.SetCompletionCommandGroupID(groupSystem)
+
+	// internalCmd (zt internal run) is a service-manager entrypoint, not
+	// something a user is meant to invoke or see — Hidden already keeps
+	// it out of the Available Commands listing regardless of group.
+	rootCmd.AddCommand(internalCmd)
 
 	reorderArgs(os.Args, rootCmd)
 

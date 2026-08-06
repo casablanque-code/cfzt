@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2026-08-06
+
+### Fixed
+
+- **Windows:** Task Scheduler actions no longer go through `cmd.exe /c ... >> log 2>&1`. That wrapper meant every argument (cloudflared's path, the config path, the log path) was parsed three times before the real process saw it — Task Scheduler's XML, cmd.exe's own argument parsing, then cmd.exe re-parsing its `/c` string a second time — and was the root cause of tunnels that ran fine manually but failed under Task Scheduler with `Last Result: 1`. `zt up`/`zt watchdog enable` now register the task to call `zt.exe` directly via a new hidden `zt internal run` entrypoint, which opens the log file itself and execs the real command with real argv — one quoting layer instead of three
+- **Windows:** `zt up` and `zt watchdog enable` no longer report success the instant `schtasks /run` accepts the request — they now poll briefly (up to ~800ms) to confirm the task is actually still running, and fail with the tail of its log if it exited immediately. Previously a cloudflared that crashed on startup (bad config, port already bound, etc.) still looked like a fully successful `zt up`, showing as inactive only on a later `zt status`/`zt doctor`
+- **Windows:** `zt restart` gets the same immediate-crash detection as `zt up`
+- **Windows:** fixed a regression from the cmd.exe removal above — `zt internal run` (and therefore every tunnel/watchdog task) was popping a visible console window on the desktop, and closing it killed cloudflared along with it. zt.exe now hides its own console window on startup when running as `internal run`, and runs the child in its own process group so it no longer shares fate with zt's console
+- `zt list`'s "no tunnels" hint and the root `zt --help` text were still showing bare `zt up <name> <port>` — stale since v0.8.0 made `--allow`/`--public` required. Both now show a working example
+- `zt --help` now groups commands (tunnel commands / manifest commands / system) instead of one flat alphabetical list, and the root help text no longer duplicates a hand-maintained command list that had drifted out of sync with the real command set
+
 ## [0.8.2] - 2026-08-05
 
 ### Fixed

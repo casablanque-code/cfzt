@@ -144,7 +144,7 @@ See [`action.yml`](action.yml) for the full list of inputs.
 
 ## What it does
 
-`zt up <name> <port>` automatically:
+`zt up <name> <port> --allow <mail@example.com>` automatically:
 
 1. Creates a Cloudflare Tunnel
 2. Configures ingress rules

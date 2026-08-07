@@ -96,7 +96,7 @@ jobs:
         if: github.event.action != 'closed'
       # ... build your image / start the container on localhost:3000 ...
 
-      - uses: casablanque-code/cfzt@v0.8.3
+      - uses: casablanque-code/cfzt@v1
         if: github.event.action != 'closed'
         with:
           mode: up
@@ -108,7 +108,7 @@ jobs:
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - uses: casablanque-code/cfzt@v0.8.3
+      - uses: casablanque-code/cfzt@v1
         if: github.event.action == 'closed'
         with:
           mode: down

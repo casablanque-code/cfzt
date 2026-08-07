@@ -121,20 +121,20 @@ jobs:
 Notes:
 
 - **`name` must match** between the `up` and `down` calls — it's the
-  tunnel name, the hostname prefix, and the cache key the action uses to
-  find the tunnel again on `down` (see below).
+  tunnel name, the hostname prefix, and what `down` resolves against
+  Cloudflare by name (see below).
 - **State across runs:** `up` and `down` normally run in entirely
-  separate, unrelated jobs — possibly weeks apart — so there's no
-  filesystem to share between them the way there would be within a single
-  job. The action bridges that with `actions/cache`, saving `~/.zt-state.json`
-  and `~/.zt` after `up` and restoring them before `down`. If that cache
-  entry has been evicted (GitHub's normal cache eviction, or the 7-day
-  unused-entry limit) by the time `down` runs, `zt down` will fail with
-  "tunnel not found in local state" and the Cloudflare Tunnel/DNS
-  record/Access app will need cleaning up by hand (`zt down` run locally
-  against restored state, or via the Cloudflare dashboard) until cfzt
-  itself gains a way to resolve and destroy a tunnel by name straight from
-  the Cloudflare API, without local state — see the issue tracker.
+  separate, unrelated jobs — possibly weeks apart, on unrelated
+  ephemeral runners — so there's no local state file for `down` to find
+  the way there would be if the same machine had run `zt up`. The action
+  calls `zt down --remote`, which resolves the tunnel directly from
+  Cloudflare by name instead of requiring it in local state. This is
+  opt-in on the CLI itself (a plain `zt down` still requires local
+  state) because a Cloudflare Tunnel has no "created by zt" marker the
+  way a zt-managed DNS record does — resolving by name alone means
+  whatever tunnel exists under that exact name gets deleted, which is
+  exactly what a CI job tearing down its own preview wants and exactly
+  what a mistyped `zt down` on your own machine doesn't.
 - `permissions: deployments: write` is required on the calling workflow
   for the Deployments UI integration — a composite action can't grant
   itself permissions. Set `create-deployment: 'false'` to skip that part

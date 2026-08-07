@@ -173,15 +173,6 @@ runs:
           > "${HOME}/.zt-config.json"
         chmod 600 "${HOME}/.zt-config.json"
 
-    - name: Restore tunnel state
-      if: inputs.mode == 'down'
-      uses: actions/cache/restore@v4
-      with:
-        path: |
-          ~/.zt-state.json
-          ~/.zt
-        key: cfzt-preview-${{ inputs.name }}
-
     - name: zt up
       if: inputs.mode == 'up'
       shell: bash
@@ -211,15 +202,6 @@ runs:
         [ -n "$PROTOCOL" ] && [ "$PROTOCOL" != "auto" ] && args+=(--protocol "$PROTOCOL")
         [ "$FORCE" = "true" ] && args+=(--force)
         zt "${args[@]}"
-
-    - name: Save tunnel state
-      if: inputs.mode == 'up'
-      uses: actions/cache/save@v4
-      with:
-        path: |
-          ~/.zt-state.json
-          ~/.zt
-        key: cfzt-preview-${{ inputs.name }}
 
     - name: Record GitHub deployment
       if: inputs.mode == 'up' && inputs.create-deployment == 'true'
@@ -254,7 +236,7 @@ runs:
       shell: bash
       env:
         NAME: ${{ inputs.name }}
-      run: zt down "$NAME"
+      run: zt down "$NAME" --remote
 
     - name: Mark GitHub deployment inactive
       if: inputs.mode == 'down' && inputs.create-deployment == 'true'

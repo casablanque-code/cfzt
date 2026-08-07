@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `casablanque-code/cfzt` is now also a composite GitHub Action wrapping `zt up`/`zt down` for PR preview environments, with a GitHub Deployment + Deployment Status reflecting the tunnel in the PR's own UI. State is bridged across the separate `up`/`down` workflow runs via `actions/cache`, keyed by tunnel name — see the new "GitHub Action" section in the README for usage and its limitations
-- `zt down <name> --remote` resolves the tunnel directly from Cloudflare by name instead of requiring it in local state — for tearing down from a different machine than the one `zt up` ran on (the cfzt-action's own actual use case; a follow-up drops its `actions/cache` workaround in favor of this). Not automatic on a plain `zt down`: Cloudflare Tunnels have no "created by zt" marker the way a zt-created DNS record does, so resolving purely by name means whatever tunnel has that name gets deleted — opt-in only
+- `casablanque-code/cfzt` is now also a composite GitHub Action wrapping `zt up`/`zt down` for PR preview environments, with a GitHub Deployment + Deployment Status reflecting the tunnel in the PR's own UI — see the new "GitHub Action" section in the README for usage
+- `zt down <name> --remote` resolves the tunnel directly from Cloudflare by name instead of requiring it in local state — for tearing down from a different machine than the one `zt up` ran on. This is what makes the action's `down` mode work at all, since "up" and "down" are separate jobs on unrelated ephemeral runners with no state to share. Not automatic on a plain `zt down`: Cloudflare Tunnels have no "created by zt" marker the way a zt-created DNS record does, so resolving purely by name means whatever tunnel has that name gets deleted — opt-in only
 
 ## [0.8.3] - 2026-08-06
 

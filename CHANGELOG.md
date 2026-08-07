@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `casablanque-code/cfzt` is now also a composite GitHub Action wrapping `zt up`/`zt down` for PR preview environments, with a GitHub Deployment + Deployment Status reflecting the tunnel in the PR's own UI. State is bridged across the separate `up`/`down` workflow runs via `actions/cache`, keyed by tunnel name — see the new "GitHub Action" section in the README for usage and its limitations
+
 ## [0.8.3] - 2026-08-06
 
 ### Fixed

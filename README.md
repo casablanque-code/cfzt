@@ -66,10 +66,81 @@ zt down pr-142
 ```
 
 Self-hosted preview URLs without Vercel, Netlify, or a hosted preview
-platform. A GitHub Action that wires this into PR checks and the
-deployments UI automatically is planned — see the issue tracker.
+platform. `casablanque-code/cfzt` ships a composite action wrapping the
+`zt up`/`zt down` calls above and reflecting them in the GitHub
+Deployments UI — see [GitHub Action](#github-action) below.
 
 ---
+
+## GitHub Action
+
+`casablanque-code/cfzt` is also a composite action wrapping `zt up`/`zt
+down` for exactly the PR-preview flow above, plus a GitHub Deployment +
+Deployment Status so the preview URL shows up in the PR's own UI, not just
+build logs.
+
+```yaml
+name: PR preview
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  deployments: write   # needed for the GitHub Deployments UI integration
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event.action != 'closed'
+      # ... build your image / start the container on localhost:3000 ...
+
+      - uses: casablanque-code/cfzt@v0.8.3
+        if: github.event.action != 'closed'
+        with:
+          mode: up
+          name: pr-${{ github.event.number }}
+          port: '3000'
+          docker: 'true'
+          public: 'true'   # or use `allow:` to restrict to your team
+          domain: example.com
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - uses: casablanque-code/cfzt@v0.8.3
+        if: github.event.action == 'closed'
+        with:
+          mode: down
+          name: pr-${{ github.event.number }}
+          domain: example.com
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+```
+
+Notes:
+
+- **`name` must match** between the `up` and `down` calls — it's the
+  tunnel name, the hostname prefix, and the cache key the action uses to
+  find the tunnel again on `down` (see below).
+- **State across runs:** `up` and `down` normally run in entirely
+  separate, unrelated jobs — possibly weeks apart — so there's no
+  filesystem to share between them the way there would be within a single
+  job. The action bridges that with `actions/cache`, saving `~/.zt-state.json`
+  and `~/.zt` after `up` and restoring them before `down`. If that cache
+  entry has been evicted (GitHub's normal cache eviction, or the 7-day
+  unused-entry limit) by the time `down` runs, `zt down` will fail with
+  "tunnel not found in local state" and the Cloudflare Tunnel/DNS
+  record/Access app will need cleaning up by hand (`zt down` run locally
+  against restored state, or via the Cloudflare dashboard) until cfzt
+  itself gains a way to resolve and destroy a tunnel by name straight from
+  the Cloudflare API, without local state — see the issue tracker.
+- `permissions: deployments: write` is required on the calling workflow
+  for the Deployments UI integration — a composite action can't grant
+  itself permissions. Set `create-deployment: 'false'` to skip that part
+  entirely and just get the tunnel.
+
+See [`action.yml`](action.yml) for the full list of inputs.
 
 ## What it does
 

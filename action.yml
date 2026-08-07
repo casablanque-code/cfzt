@@ -1,0 +1,274 @@
+name: 'cfzt preview tunnel'
+description: >-
+  Bring up or tear down a Cloudflare Zero Trust tunnel with cfzt (zt), and
+  reflect it in the GitHub Deployments UI. Built for PR preview environments:
+  "up" on PR open/sync, "down" on PR close.
+author: casablanque-code
+branding:
+  icon: cloud-lightning
+  color: orange
+
+inputs:
+  mode:
+    description: "'up' to create the tunnel, 'down' to tear it down."
+    required: true
+  name:
+    description: >-
+      Tunnel name. Also becomes the hostname (<name>.<domain>) and the
+      cache/deployment key — use the *same* name on the "up" and "down"
+      call for a given preview (e.g. "pr-${{ github.event.number }}").
+    required: true
+  domain:
+    description: 'Cloudflare zone the tunnel hostname is created under.'
+    required: true
+  cloudflare-api-token:
+    description: >-
+      Cloudflare API token with Account/Cloudflare Tunnel/Edit,
+      Zone/DNS/Edit, and Account/Access: Apps and Policies/Edit.
+    required: true
+  cloudflare-account-id:
+    description: 'Cloudflare account ID.'
+    required: true
+  port:
+    description: 'Local port to expose. Required for mode=up unless docker is true.'
+    required: false
+    default: ''
+  docker:
+    description: 'Auto-detect the port from a Docker container named `name`. mode=up only.'
+    required: false
+    default: 'false'
+  public:
+    description: >-
+      No Zero Trust Access login — anyone with the URL can view it.
+      Mutually exclusive with allow. mode=up only.
+    required: false
+    default: 'false'
+  allow:
+    description: >-
+      Newline-separated emails to restrict access to via Cloudflare Access.
+      Mutually exclusive with public. mode=up only.
+    required: false
+    default: ''
+  tcp:
+    description: 'Force TCP/http2 instead of QUIC. mode=up only.'
+    required: false
+    default: 'false'
+  protocol:
+    description: 'cloudflared protocol: auto, quic, or http2. mode=up only.'
+    required: false
+    default: 'auto'
+  force:
+    description: >-
+      Replace a pre-existing DNS record for the hostname that a previous
+      cfzt run didn't create. mode=up only.
+    required: false
+    default: 'false'
+  environment:
+    description: 'GitHub Deployments environment name. Defaults to `name`.'
+    required: false
+    default: ''
+  create-deployment:
+    description: 'Record this up/down in the GitHub Deployments UI.'
+    required: false
+    default: 'true'
+  github-token:
+    description: 'Token used for the Deployments API. Needs the `deployments: write` permission.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  url:
+    description: 'https:// URL of the tunnel. Set for mode=up.'
+    value: ${{ steps.hostname.outputs.url }}
+  hostname:
+    description: 'Bare hostname of the tunnel, e.g. pr-142.example.com.'
+    value: ${{ steps.hostname.outputs.hostname }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        DOCKER: ${{ inputs.docker }}
+        PORT: ${{ inputs.port }}
+      run: |
+        set -euo pipefail
+        case "$MODE" in
+          up|down) ;;
+          *) echo "::error::mode must be 'up' or 'down', got '$MODE'"; exit 1 ;;
+        esac
+        if [ "$MODE" = "up" ] && [ "$DOCKER" != "true" ] && [ -z "$PORT" ]; then
+          echo "::error::port is required for mode=up unless docker is true"
+          exit 1
+        fi
+
+    - name: Compute hostname
+      id: hostname
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+        DOMAIN: ${{ inputs.domain }}
+        MODE: ${{ inputs.mode }}
+      run: |
+        set -euo pipefail
+        hostname="${NAME}.${DOMAIN}"
+        echo "hostname=${hostname}" >> "$GITHUB_OUTPUT"
+        if [ "$MODE" = "up" ]; then
+          echo "url=https://${hostname}" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Resolve deployment environment name
+      id: env-name
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        NAME: ${{ inputs.name }}
+      run: |
+        set -euo pipefail
+        echo "environment=${ENVIRONMENT:-$NAME}" >> "$GITHUB_OUTPUT"
+
+    - name: Install cloudflared
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v cloudflared >/dev/null 2>&1; then
+          echo "cloudflared already on PATH: $(cloudflared --version)"
+          exit 0
+        fi
+        arch="$(uname -m)"
+        case "$arch" in
+          x86_64) asset=cloudflared-linux-amd64 ;;
+          aarch64|arm64) asset=cloudflared-linux-arm64 ;;
+          *) echo "::error::unsupported architecture for cloudflared: $arch"; exit 1 ;;
+        esac
+        curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}" -o /usr/local/bin/cloudflared
+        chmod +x /usr/local/bin/cloudflared
+        cloudflared --version
+
+    - name: Install cfzt
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v zt >/dev/null 2>&1; then
+          echo "zt already on PATH: $(zt version)"
+          exit 0
+        fi
+        curl -fsSL https://raw.githubusercontent.com/casablanque-code/cfzt/main/install.sh | bash
+
+    - name: Write cfzt config
+      shell: bash
+      env:
+        CF_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CF_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        DOMAIN: ${{ inputs.domain }}
+      run: |
+        set -euo pipefail
+        jq -n \
+          --arg api_token "$CF_API_TOKEN" \
+          --arg account_id "$CF_ACCOUNT_ID" \
+          --arg domain "$DOMAIN" \
+          '{api_token: $api_token, account_id: $account_id, domain: $domain}' \
+          > "${HOME}/.zt-config.json"
+        chmod 600 "${HOME}/.zt-config.json"
+
+    - name: Restore tunnel state
+      if: inputs.mode == 'down'
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ~/.zt-state.json
+          ~/.zt
+        key: cfzt-preview-${{ inputs.name }}
+
+    - name: zt up
+      if: inputs.mode == 'up'
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+        PORT: ${{ inputs.port }}
+        DOCKER: ${{ inputs.docker }}
+        PUBLIC: ${{ inputs.public }}
+        ALLOW: ${{ inputs.allow }}
+        TCP: ${{ inputs.tcp }}
+        PROTOCOL: ${{ inputs.protocol }}
+        FORCE: ${{ inputs.force }}
+      run: |
+        set -euo pipefail
+        args=(up "$NAME")
+        if [ "$DOCKER" = "true" ]; then
+          args+=(--docker)
+          [ -n "$PORT" ] && args+=("$PORT")
+        else
+          args+=("$PORT")
+        fi
+        [ "$PUBLIC" = "true" ] && args+=(--public)
+        while IFS= read -r email; do
+          [ -n "$email" ] && args+=(--allow "$email")
+        done <<< "$ALLOW"
+        [ "$TCP" = "true" ] && args+=(--tcp)
+        [ -n "$PROTOCOL" ] && [ "$PROTOCOL" != "auto" ] && args+=(--protocol "$PROTOCOL")
+        [ "$FORCE" = "true" ] && args+=(--force)
+        zt "${args[@]}"
+
+    - name: Save tunnel state
+      if: inputs.mode == 'up'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ~/.zt-state.json
+          ~/.zt
+        key: cfzt-preview-${{ inputs.name }}
+
+    - name: Record GitHub deployment
+      if: inputs.mode == 'up' && inputs.create-deployment == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        REF: ${{ github.sha }}
+        ENVIRONMENT: ${{ steps.env-name.outputs.environment }}
+        URL: ${{ steps.hostname.outputs.url }}
+      run: |
+        set -euo pipefail
+        # required_contexts: [] matters here — without it the Deployments
+        # API defers to the repo's required status checks and can refuse
+        # to create the deployment before they've all passed, which isn't
+        # what we want for a preview tunnel that IS one of the checks.
+        payload=$(jq -n \
+          --arg ref "$REF" \
+          --arg environment "$ENVIRONMENT" \
+          --arg description "cfzt preview: $URL" \
+          '{ref: $ref, environment: $environment, description: $description, auto_merge: false, required_contexts: []}')
+        deployment_id=$(gh api "repos/${REPO}/deployments" --method POST --input - <<< "$payload" --jq '.id')
+
+        status_payload=$(jq -n \
+          --arg environment "$ENVIRONMENT" \
+          --arg environment_url "$URL" \
+          '{state: "success", environment: $environment, environment_url: $environment_url, description: "tunnel live"}')
+        gh api "repos/${REPO}/deployments/${deployment_id}/statuses" --method POST --input - <<< "$status_payload"
+
+    - name: zt down
+      if: inputs.mode == 'down'
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+      run: zt down "$NAME"
+
+    - name: Mark GitHub deployment inactive
+      if: inputs.mode == 'down' && inputs.create-deployment == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        ENVIRONMENT: ${{ steps.env-name.outputs.environment }}
+      run: |
+        set -euo pipefail
+        ids=$(gh api "repos/${REPO}/deployments?environment=${ENVIRONMENT}" --jq '.[].id')
+        for id in $ids; do
+          gh api "repos/${REPO}/deployments/${id}/statuses" \
+            --method POST \
+            -f "state=inactive" \
+            -f "environment=${ENVIRONMENT}"
+        done

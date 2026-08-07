@@ -164,7 +164,11 @@ flowchart LR
     C & D & E & F --> G[https://name.example.com]
 ```
 
-`zt down <name>` attempts to remove all created resources.
+`zt down <name>` attempts to remove all created resources. It looks the
+tunnel up in local state by default; pass `--remote` to resolve it
+directly from Cloudflare by name instead, for tearing down from a
+different machine than the one `zt up` ran on (e.g. CI — see the
+[GitHub Action](#github-action) section).
 
 ---
 

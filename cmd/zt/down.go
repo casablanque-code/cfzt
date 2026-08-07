@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/casablanque-code/cfzt/config"
+	"github.com/casablanque-code/cfzt/internal/cloudflare"
 	"github.com/casablanque-code/cfzt/internal/cloudflared"
 	"github.com/casablanque-code/cfzt/internal/service"
 	"github.com/casablanque-code/cfzt/internal/state"
@@ -11,11 +12,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var downFlagRemote bool
+
 var downCmd = &cobra.Command{
 	Use:   "down <name>",
 	Short: "Tear down a tunnel and remove all Cloudflare resources",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runDown,
+}
+
+func init() {
+	downCmd.Flags().BoolVar(&downFlagRemote, "remote", false,
+		"resolve the tunnel directly from Cloudflare by name if it's not in local state — e.g. tearing down from a different machine than \"zt up\" ran on")
 }
 
 func runDown(cmd *cobra.Command, args []string) error {
@@ -31,15 +39,23 @@ func runDown(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	tunnel, exists := store.Get(name)
-	if !exists {
-		return fmt.Errorf("tunnel %q not found in local state", name)
-	}
-
 	cf := newCFClient(cfg.APIToken, cfg.AccountID)
 	okFn := color.New(color.FgGreen).SprintFunc()
 	warnFn := color.New(color.FgYellow).SprintFunc()
 	boldFmt := color.New(color.Bold).SprintFunc()
+
+	tunnel, exists := store.Get(name)
+	if !exists {
+		if !downFlagRemote {
+			return fmt.Errorf("tunnel %q not found in local state\n  if this is a different machine than the one \"zt up %s\" ran on (e.g. CI), pass --remote to resolve it from Cloudflare by name instead", name, name)
+		}
+		fmt.Printf("  %s %q isn't in local state — resolving it from Cloudflare directly (--remote)\n", warnFn("!"), name)
+		resolved, err := resolveTunnelRemote(cf, cfg, name)
+		if err != nil {
+			return err
+		}
+		tunnel = resolved
+	}
 
 	fmt.Printf("\n%s\n\n", boldFmt("⚡ Tearing down "+name))
 
@@ -121,4 +137,34 @@ func runDown(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Printf("  %s\n\n", boldFmt("✓ "+name+" torn down"))
 	return nil
+}
+
+// resolveTunnelRemote reconstructs enough of a state.Tunnel to tear down
+// when name isn't in local state, by resolving it against Cloudflare
+// directly instead. Only TunnelID and Hostname get filled in — the other
+// steps in runDown either look things up independently by hostname
+// already (DNS record, Access app) or are inherently local-machine-only
+// and correctly no-op when there's nothing here to clean up (the
+// service/PID removal step, local config files).
+//
+// Gated behind --remote rather than an automatic fallback: Cloudflare
+// Tunnels have no "created by zt" marker the way a zt-created DNS CNAME
+// does (looksLikeZtRecord), so resolving by name alone means whatever
+// tunnel is on the account with that exact name gets deleted — safe
+// when the caller knows that's the one they mean (a CI job tearing down
+// its own PR preview), not safe to do implicitly on every plain `zt down`
+// typo.
+func resolveTunnelRemote(cf *cloudflare.Client, cfg *config.Config, name string) (*state.Tunnel, error) {
+	tunnelID, err := cf.FindTunnelByName(name)
+	if err != nil {
+		return nil, fmt.Errorf("looking up tunnel %q on Cloudflare: %w", name, err)
+	}
+	if tunnelID == "" {
+		return nil, fmt.Errorf("tunnel %q not found in local state or on Cloudflare — nothing to tear down", name)
+	}
+	return &state.Tunnel{
+		Name:     name,
+		TunnelID: tunnelID,
+		Hostname: name + "." + cfg.Domain,
+	}, nil
 }

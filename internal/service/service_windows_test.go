@@ -269,3 +269,23 @@ func TestTaskExists_NotInstalled(t *testing.T) {
 		t.Error("taskExists() = true, want false for a task that was never created")
 	}
 }
+
+// TestUninstall_NoTaskIsNoop and TestUninstallWatchdog_NoTaskIsNoop are
+// regression tests for the "ends the task before deleting it" change:
+// they exercise the early return for a task that was never created,
+// which must stay a clean no-op and must NOT reach the /end call with a
+// task name that was never registered.
+func TestUninstall_NoTaskIsNoop(t *testing.T) {
+	if err := Uninstall("zt-test-task-does-not-exist"); err != nil {
+		t.Errorf("Uninstall() error = %v, want nil for a tunnel with no task installed", err)
+	}
+}
+
+func TestUninstallWatchdog_NoTaskIsNoop(t *testing.T) {
+	if taskExists(watchdogTaskName) {
+		t.Skip("a real watchdog task is installed on this machine — skipping to avoid touching it")
+	}
+	if err := UninstallWatchdog(); err != nil {
+		t.Errorf("UninstallWatchdog() error = %v, want nil when no watchdog task is installed", err)
+	}
+}

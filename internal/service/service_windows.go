@@ -307,11 +307,21 @@ func Restart(name string) error {
 
 // Uninstall removes the task. Missing task is not an error — mirrors
 // Uninstall's os.IsNotExist handling on Linux/macOS.
+//
+// Ends the running task before deleting its definition. schtasks /delete
+// only removes the task's registration — it does NOT stop an already-
+// running instance of its action, which just keeps running as an orphaned
+// process once Task Scheduler stops tracking it. Since the action is
+// `zt.exe internal run` (see tunnelRunArgs), that orphan is a "zt"
+// process indistinguishable from any other running zt — exactly what
+// made `scoop update zt` refuse to update with "still running" after a
+// `zt down` that had, from the user's side, already torn everything down.
 func Uninstall(name string) error {
 	tn := taskName(name)
 	if !taskExists(tn) {
 		return nil
 	}
+	_, _ = runSchtasks("/end", "/tn", tn)
 	out, err := runSchtasks("/delete", "/tn", tn, "/f")
 	if err != nil {
 		return fmt.Errorf("schtasks /delete: %w\n%s\n%s", err, out, accessDeniedHint(tn))
@@ -369,10 +379,13 @@ func InstallWatchdog(logPath string) error {
 }
 
 // UninstallWatchdog removes the watchdog task. Missing task is a no-op.
+// UninstallWatchdog removes the watchdog task, ending it first — see
+// Uninstall's comment for why that matters.
 func UninstallWatchdog() error {
 	if !taskExists(watchdogTaskName) {
 		return nil
 	}
+	_, _ = runSchtasks("/end", "/tn", watchdogTaskName)
 	out, err := runSchtasks("/delete", "/tn", watchdogTaskName, "/f")
 	if err != nil {
 		return fmt.Errorf("schtasks /delete: %w\n%s\n%s", err, out, accessDeniedHint(watchdogTaskName))

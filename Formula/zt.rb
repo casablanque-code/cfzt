@@ -1,26 +1,26 @@
 class Zt < Formula
   desc "Zero Trust tunnel manager for Cloudflare"
   homepage "https://github.com/casablanque-code/cfzt"
-  version "1"
+  version "0.9.0"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/casablanque-code/cfzt/releases/download/v1/zt-darwin-arm64"
-      sha256 "8e146a4d700c384efc5d8d5a0ca8c819953046efcc981b43dc2e741d377083b2"
+      url "https://github.com/casablanque-code/cfzt/releases/download/v0.9.0/zt-darwin-arm64"
+      sha256 "f4439cd27054f43c51bad640744074b89f0bbca5082b459e4c35d382c1a92922"
     else
-      url "https://github.com/casablanque-code/cfzt/releases/download/v1/zt-darwin-amd64"
-      sha256 "2c178f2237fe8ed54e3d9fce29bc4742b96782894b7d514201163fc39675de95"
+      url "https://github.com/casablanque-code/cfzt/releases/download/v0.9.0/zt-darwin-amd64"
+      sha256 "cb09f7f6b6a769a18d42fbd971178aec13717b6b185f3380c7253c759d38a74f"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/casablanque-code/cfzt/releases/download/v1/zt-linux-arm64"
-      sha256 "ed0d1f008be6e979567e65e20e533cc9e82adbef4ac630db8b52a70af6048854"
+      url "https://github.com/casablanque-code/cfzt/releases/download/v0.9.0/zt-linux-arm64"
+      sha256 "ff2173c9f85aba2484cb7f9f24ae87ae5c4adae6163dccb562c941f094aba20a"
     else
-      url "https://github.com/casablanque-code/cfzt/releases/download/v1/zt-linux-amd64"
-      sha256 "d7e3f0b251656afb425e09bc293e1e460ca17df7c8ede6d42e7ce0e04c1f8fc8"
+      url "https://github.com/casablanque-code/cfzt/releases/download/v0.9.0/zt-linux-amd64"
+      sha256 "ab910e011376021d9807cb6f8cef6ce96a9da852c860506bec8ab56d7182afca"
     end
   end
 

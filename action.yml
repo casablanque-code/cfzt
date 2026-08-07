@@ -1,8 +1,6 @@
 name: 'cfzt preview tunnel'
 description: >-
-  Bring up or tear down a Cloudflare Zero Trust tunnel with cfzt (zt), and
-  reflect it in the GitHub Deployments UI. Built for PR preview environments:
-  "up" on PR open/sync, "down" on PR close.
+  Bring up or tear down a Cloudflare Zero Trust preview tunnel with cfzt (zt) via GitHub Deployments.
 author: casablanque-code
 branding:
   icon: cloud-lightning

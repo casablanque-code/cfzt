@@ -152,3 +152,31 @@ func TestFindContainerPort_DockerUnreachable(t *testing.T) {
 		t.Fatal("FindContainerPort() = nil error, want error when docker is unreachable")
 	}
 }
+
+// Multiple published TCP ports must resolve to the same port every time
+// regardless of Go's randomized map iteration order — a container with
+// e.g. -p 8080:80 -p 8443:443 should always pick the lowest container
+// port (80/tcp here), not whichever key the map happened to yield first.
+func TestFindContainerPort_MultiplePorts_Deterministic(t *testing.T) {
+	withDockerServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/version") {
+			jsonHandler(200, `{"ApiVersion":"1.44"}`)(w, r)
+			return
+		}
+		jsonHandler(200, `{"State":{"Running":true},"NetworkSettings":{"Ports":{
+			"443/tcp":[{"HostPort":"8443"}],
+			"80/tcp":[{"HostPort":"8080"}],
+			"9000/tcp":[{"HostPort":"9999"}]
+		}}}`)(w, r)
+	})
+
+	for i := 0; i < 20; i++ {
+		port, err := FindContainerPort("multi-port")
+		if err != nil {
+			t.Fatalf("FindContainerPort() error = %v", err)
+		}
+		if port != "8080" {
+			t.Fatalf("FindContainerPort() = %q, want 8080 (lowest container port 80/tcp) on iteration %d", port, i)
+		}
+	}
+}

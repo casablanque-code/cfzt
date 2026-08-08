@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -134,12 +137,50 @@ func findByList(name string) (string, error) {
 }
 
 func pickPort(name string, ports map[string][]portBinding) (string, error) {
-	for _, bindings := range ports {
-		for _, b := range bindings {
-			if b.HostPort != "" {
-				return b.HostPort, nil
-			}
+	// map iteration order is randomized in Go, so picking the first key
+	// seen made the chosen port nondeterministic across runs whenever a
+	// container published more than one (e.g. -p 8080:80 -p 8443:443) —
+	// same container, same `zt up --docker` invocation, different port
+	// depending on run. Sort keys ("80/tcp", "443/tcp", ...) and take the
+	// lowest container port among tcp bindings, so the choice is stable
+	// and matches what a reader would expect ("the app's main port").
+	var tcpKeys []string
+	for k, bindings := range ports {
+		if len(bindings) == 0 || bindings[0].HostPort == "" {
+			continue
+		}
+		if !strings.HasSuffix(k, "/tcp") {
+			continue
+		}
+		tcpKeys = append(tcpKeys, k)
+	}
+	if len(tcpKeys) == 0 {
+		return "", fmt.Errorf("container %q has no published TCP ports\n  hint: start it with -p <host_port>:<container_port>", name)
+	}
+	sort.Slice(tcpKeys, func(i, j int) bool {
+		return containerPortNum(tcpKeys[i]) < containerPortNum(tcpKeys[j])
+	})
+	best := tcpKeys[0]
+	for _, b := range ports[best] {
+		if b.HostPort != "" {
+			return b.HostPort, nil
 		}
 	}
 	return "", fmt.Errorf("container %q has no published ports\n  hint: start it with -p <host_port>:<container_port>", name)
+}
+
+// containerPortNum extracts the numeric container port from a Docker
+// ports-map key like "80/tcp" ("443/tcp" -> 443). Unparseable keys sort
+// last (return maxInt) rather than erroring — pickPort's job is to make a
+// reasonable deterministic choice, not to validate Docker's own output.
+func containerPortNum(key string) int {
+	numPart, _, found := strings.Cut(key, "/")
+	if !found {
+		return math.MaxInt
+	}
+	n, err := strconv.Atoi(numPart)
+	if err != nil {
+		return math.MaxInt
+	}
+	return n
 }

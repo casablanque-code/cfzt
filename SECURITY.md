@@ -42,3 +42,15 @@ Things we care about most:
 - Tunnel credentials are stored at `~/.zt/tunnels/<name>/<id>.json` with mode `0600`
 - cfzt never transmits credentials anywhere except the Cloudflare API over HTTPS
 - The Gitleaks CI scan checks all commits for accidentally leaked secrets
+- **`zt down --remote` deletes by name, not by ownership.** Cloudflare
+  Tunnels have no "created by zt" marker the way a zt-managed DNS
+  record does, so `--remote` resolves and tears down *whatever tunnel
+  exists on the account under that exact name* — including one you
+  created manually via the Cloudflare dashboard, if it happens to
+  share the name. It's opt-in and off by default (a plain `zt down`
+  only ever acts on tunnels in local state) specifically so this can't
+  happen from a typo on your own machine. Reserve `--remote` for
+  automated contexts — CI tearing down its own PR preview — where the
+  caller already knows the name is exclusively theirs, and treat
+  reusing tunnel names between manually-managed and zt-managed tunnels
+  as unsafe.

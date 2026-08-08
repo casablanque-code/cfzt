@@ -55,6 +55,23 @@ inputs:
     description: 'cloudflared protocol: auto, quic, or http2. mode=up only.'
     required: false
     default: 'auto'
+  cloudflared-version:
+    description: >-
+      cloudflared release tag to install (e.g. '2026.7.0'), skipping
+      the version check on PATH. Leave empty to always install
+      whatever the "latest" GitHub release currently is — simplest,
+      but the exact binary a given commit runs against can then change
+      between one workflow run and the next. Pin this for reproducible
+      CI.
+    required: false
+    default: ''
+  cfzt-version:
+    description: >-
+      cfzt (zt) release tag to install (e.g. 'v0.9.0'). Leave empty to
+      install main's install.sh at whatever it currently resolves to
+      "latest" as — same reproducibility caveat as cloudflared-version.
+    required: false
+    default: ''
   force:
     description: >-
       Replace a pre-existing DNS record for the hostname that a previous
@@ -91,6 +108,7 @@ runs:
         MODE: ${{ inputs.mode }}
         DOCKER: ${{ inputs.docker }}
         PORT: ${{ inputs.port }}
+        CREATE_DEPLOYMENT: ${{ inputs.create-deployment }}
       run: |
         set -euo pipefail
         case "$MODE" in
@@ -100,6 +118,22 @@ runs:
         if [ "$MODE" = "up" ] && [ "$DOCKER" != "true" ] && [ -z "$PORT" ]; then
           echo "::error::port is required for mode=up unless docker is true"
           exit 1
+        fi
+        # jq is used unconditionally (config write, up/down argument
+        # building); gh only when the Deployments API steps actually run.
+        # Failing fast here with a clear message beats the composite
+        # action dying several steps in with a bare "command not found"
+        # on a self-hosted runner that doesn't have these preinstalled —
+        # both ship by default on GitHub-hosted Ubuntu runners.
+        command -v jq >/dev/null 2>&1 || {
+          echo "::error::jq is required (not found on PATH) — install it or use a runner image that includes it"
+          exit 1
+        }
+        if [ "$CREATE_DEPLOYMENT" = "true" ]; then
+          command -v gh >/dev/null 2>&1 || {
+            echo "::error::gh (GitHub CLI) is required for create-deployment (not found on PATH) — install it, or set create-deployment: 'false' to skip the Deployments UI integration"
+            exit 1
+          }
         fi
 
     - name: Compute hostname
@@ -129,6 +163,8 @@ runs:
 
     - name: Install cloudflared
       shell: bash
+      env:
+        CLOUDFLARED_VERSION: ${{ inputs.cloudflared-version }}
       run: |
         set -euo pipefail
         if command -v cloudflared >/dev/null 2>&1; then
@@ -141,21 +177,40 @@ runs:
           aarch64|arm64) asset=cloudflared-linux-arm64 ;;
           *) echo "::error::unsupported architecture for cloudflared: $arch"; exit 1 ;;
         esac
-        curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}" -o /usr/local/bin/cloudflared
+        if [ -n "$CLOUDFLARED_VERSION" ]; then
+          url="https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/${asset}"
+        else
+          echo "::warning::cloudflared-version not set — installing whatever 'latest' currently is. Pin cloudflared-version for reproducible runs."
+          url="https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}"
+        fi
+        curl -fsSL "$url" -o /usr/local/bin/cloudflared
         chmod +x /usr/local/bin/cloudflared
         cloudflared --version
 
     - name: Install cfzt
       shell: bash
+      env:
+        CFZT_VERSION: ${{ inputs.cfzt-version }}
       run: |
         set -euo pipefail
         if command -v zt >/dev/null 2>&1; then
           echo "zt already on PATH: $(zt version)"
           exit 0
         fi
-        curl -fsSL https://raw.githubusercontent.com/casablanque-code/cfzt/main/install.sh | bash
+        if [ -n "$CFZT_VERSION" ]; then
+          # Pin install.sh itself to the same tag, not just the binary it
+          # installs — main's install.sh can change independently of any
+          # released zt version, so fetching it from main would still
+          # leave the install *process* unpinned even with ZT_VERSION set.
+          curl -fsSL "https://raw.githubusercontent.com/casablanque-code/cfzt/${CFZT_VERSION}/install.sh" \
+            | ZT_VERSION="$CFZT_VERSION" bash
+        else
+          echo "::warning::cfzt-version not set — installing whatever main's install.sh currently resolves 'latest' to. Pin cfzt-version for reproducible runs."
+          curl -fsSL https://raw.githubusercontent.com/casablanque-code/cfzt/main/install.sh | bash
+        fi
 
     - name: Write cfzt config
+      id: write-config
       shell: bash
       env:
         CF_API_TOKEN: ${{ inputs.cloudflare-api-token }}
@@ -163,6 +218,11 @@ runs:
         DOMAIN: ${{ inputs.domain }}
       run: |
         set -euo pipefail
+        if [ -e "${HOME}/.zt-config.json" ]; then
+          echo "created=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "created=true" >> "$GITHUB_OUTPUT"
+        fi
         jq -n \
           --arg api_token "$CF_API_TOKEN" \
           --arg account_id "$CF_ACCOUNT_ID" \
@@ -172,6 +232,7 @@ runs:
         chmod 600 "${HOME}/.zt-config.json"
 
     - name: zt up
+      id: zt-up
       if: inputs.mode == 'up'
       shell: bash
       env:
@@ -202,12 +263,14 @@ runs:
         zt "${args[@]}"
 
     - name: Record GitHub deployment
+      id: record-deployment
       if: inputs.mode == 'up' && inputs.create-deployment == 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         REPO: ${{ github.repository }}
         REF: ${{ github.sha }}
+        NAME: ${{ inputs.name }}
         ENVIRONMENT: ${{ steps.env-name.outputs.environment }}
         URL: ${{ steps.hostname.outputs.url }}
       run: |
@@ -216,11 +279,22 @@ runs:
         # API defers to the repo's required status checks and can refuse
         # to create the deployment before they've all passed, which isn't
         # what we want for a preview tunnel that IS one of the checks.
+        # task is set to "cfzt:<name>" (rather than left as the default
+        # "deploy") so the "down" step can identify exactly which
+        # deployments belong to this preview, independent of environment
+        # or sha. environment alone isn't enough: it can be reused across
+        # multiple previews (e.g. several PRs all passed `environment:
+        # preview`), and matching by sha doesn't work either since down
+        # runs on pull_request:closed with a different sha than whichever
+        # up call(s) preceded it. name is the one value the action
+        # requires to stay identical between up and down, so it's the
+        # only safe join key.
         payload=$(jq -n \
           --arg ref "$REF" \
           --arg environment "$ENVIRONMENT" \
           --arg description "cfzt preview: $URL" \
-          '{ref: $ref, environment: $environment, description: $description, auto_merge: false, required_contexts: []}')
+          --arg task "cfzt:${NAME}" \
+          '{ref: $ref, task: $task, environment: $environment, description: $description, auto_merge: false, required_contexts: []}')
         deployment_id=$(gh api "repos/${REPO}/deployments" --method POST --input - <<< "$payload" --jq '.id')
 
         status_payload=$(jq -n \
@@ -228,6 +302,29 @@ runs:
           --arg environment_url "$URL" \
           '{state: "success", environment: $environment, environment_url: $environment_url, description: "tunnel live"}')
         gh api "repos/${REPO}/deployments/${deployment_id}/statuses" --method POST --input - <<< "$status_payload"
+
+    - name: Clean up tunnel on deployment-recording failure
+      # zt up creating a live tunnel while the GitHub Deployment never
+      # gets recorded leaves Cloudflare state that nothing in the
+      # workflow knows to tear down later — the corresponding "down" run
+      # (keyed off task=cfzt:<name>) will never find a deployment to
+      # react to, and there's no other trigger for it. If the up half
+      # succeeded but recording it failed, undo the tunnel immediately
+      # rather than leaving an orphaned preview live indefinitely.
+      # always() is required here: the default step condition skips this
+      # step entirely once any prior step has failed, which would also
+      # skip this cleanup — always() plus the explicit outcome checks
+      # narrow it back down to exactly the up-succeeded/record-failed case.
+      if: >-
+        always() && inputs.mode == 'up' && inputs.create-deployment == 'true' &&
+        steps.zt-up.outcome == 'success' && steps.record-deployment.outcome == 'failure'
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+      run: |
+        set -euo pipefail
+        echo "::warning::GitHub deployment recording failed after zt up succeeded — tearing the tunnel back down"
+        zt down "$NAME" --remote
 
     - name: zt down
       if: inputs.mode == 'down'
@@ -242,13 +339,37 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         REPO: ${{ github.repository }}
+        NAME: ${{ inputs.name }}
         ENVIRONMENT: ${{ steps.env-name.outputs.environment }}
       run: |
         set -euo pipefail
-        ids=$(gh api "repos/${REPO}/deployments?environment=${ENVIRONMENT}" --jq '.[].id')
+        # Filter by task, not just environment: environment can be reused
+        # across multiple unrelated previews (custom `environment:` input
+        # set to the same value for several PRs), and the environment
+        # query param alone would then mark every one of them inactive.
+        # task="cfzt:<name>" was set at creation time in the "up" step and
+        # is unique per preview, so re-check it client-side after the
+        # environment-scoped list call.
+        task="cfzt:${NAME}"
+        ids=$(gh api "repos/${REPO}/deployments?environment=${ENVIRONMENT}" \
+          --jq --arg task "$task" '.[] | select(.task == $task) | .id')
         for id in $ids; do
           gh api "repos/${REPO}/deployments/${id}/statuses" \
             --method POST \
             -f "state=inactive" \
             -f "environment=${ENVIRONMENT}"
         done
+
+    - name: Remove cfzt config
+      # Only removes the file this run itself created (write-config's
+      # created=true) — never a config that already existed on the
+      # runner before this action touched it, e.g. a self-hosted runner
+      # with its own persistent ~/.zt-config.json. always() so this
+      # still runs after an earlier step failure; on GitHub-hosted
+      # ephemeral runners the API token dying with the VM makes this
+      # mostly redundant, but on self-hosted/persistent runners a
+      # Cloudflare API token left sitting in a world-readable-by-owner
+      # file after the job ends is unnecessary exposure.
+      if: always() && steps.write-config.outputs.created == 'true'
+      shell: bash
+      run: rm -f "${HOME}/.zt-config.json"

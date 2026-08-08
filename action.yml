@@ -208,6 +208,7 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         REPO: ${{ github.repository }}
         REF: ${{ github.sha }}
+        NAME: ${{ inputs.name }}
         ENVIRONMENT: ${{ steps.env-name.outputs.environment }}
         URL: ${{ steps.hostname.outputs.url }}
       run: |
@@ -216,11 +217,22 @@ runs:
         # API defers to the repo's required status checks and can refuse
         # to create the deployment before they've all passed, which isn't
         # what we want for a preview tunnel that IS one of the checks.
+        # task is set to "cfzt:<name>" (rather than left as the default
+        # "deploy") so the "down" step can identify exactly which
+        # deployments belong to this preview, independent of environment
+        # or sha. environment alone isn't enough: it can be reused across
+        # multiple previews (e.g. several PRs all passed `environment:
+        # preview`), and matching by sha doesn't work either since down
+        # runs on pull_request:closed with a different sha than whichever
+        # up call(s) preceded it. name is the one value the action
+        # requires to stay identical between up and down, so it's the
+        # only safe join key.
         payload=$(jq -n \
           --arg ref "$REF" \
           --arg environment "$ENVIRONMENT" \
           --arg description "cfzt preview: $URL" \
-          '{ref: $ref, environment: $environment, description: $description, auto_merge: false, required_contexts: []}')
+          --arg task "cfzt:${NAME}" \
+          '{ref: $ref, task: $task, environment: $environment, description: $description, auto_merge: false, required_contexts: []}')
         deployment_id=$(gh api "repos/${REPO}/deployments" --method POST --input - <<< "$payload" --jq '.id')
 
         status_payload=$(jq -n \
@@ -242,10 +254,20 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         REPO: ${{ github.repository }}
+        NAME: ${{ inputs.name }}
         ENVIRONMENT: ${{ steps.env-name.outputs.environment }}
       run: |
         set -euo pipefail
-        ids=$(gh api "repos/${REPO}/deployments?environment=${ENVIRONMENT}" --jq '.[].id')
+        # Filter by task, not just environment: environment can be reused
+        # across multiple unrelated previews (custom `environment:` input
+        # set to the same value for several PRs), and the environment
+        # query param alone would then mark every one of them inactive.
+        # task="cfzt:<name>" was set at creation time in the "up" step and
+        # is unique per preview, so re-check it client-side after the
+        # environment-scoped list call.
+        task="cfzt:${NAME}"
+        ids=$(gh api "repos/${REPO}/deployments?environment=${ENVIRONMENT}" \
+          --jq --arg task "$task" '.[] | select(.task == $task) | .id')
         for id in $ids; do
           gh api "repos/${REPO}/deployments/${id}/statuses" \
             --method POST \

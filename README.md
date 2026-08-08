@@ -288,7 +288,7 @@ If `cloudflared` isn't on `PATH` (or task creation fails for any other
 reason), `zt up` falls back to running it as a directly tracked process —
 you'll see `(no auto-restart)` in the output when that happens.
 
-(Windows install: [Scoop](#option-f--scoop-windows) (recommended, self-updating) or [PowerShell script](#option-g--windows-powershell) above. A winget package is planned — see the issue tracker for status.)
+(Windows install: [Scoop](#option-f--scoop-windows) (recommended, self-updating). A winget package is planned — see the issue tracker for status.)
 
 ---
 

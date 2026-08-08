@@ -188,6 +188,26 @@ func waitForTaskRunning(tn string) bool {
 	return false
 }
 
+// waitForTaskStopped polls tn's state for up to taskStartupBackoff's total
+// span and reports whether it left Running. schtasks /end only requests
+// termination — it doesn't block until the process is actually gone — so
+// without this, Uninstall's subsequent /delete could remove the task
+// registration while the cloudflared process it was tracking is still
+// alive and holding its port, leaving an orphan indistinguishable from
+// any other running process once Task Scheduler stops tracking it.
+func waitForTaskStopped(tn string) bool {
+	if !taskIsRunning(tn) {
+		return true
+	}
+	for _, d := range taskStartupBackoff {
+		time.Sleep(d)
+		if !taskIsRunning(tn) {
+			return true
+		}
+	}
+	return false
+}
+
 // tailLog returns the last n lines of the file at path, indented for
 // display, or a placeholder if it can't be read. Best-effort diagnostic
 // context for a task that died immediately after starting — not worth
@@ -322,6 +342,9 @@ func Uninstall(name string) error {
 		return nil
 	}
 	_, _ = runSchtasks("/end", "/tn", tn)
+	if !waitForTaskStopped(tn) {
+		fmt.Printf("  ! %s did not report stopped after /end — deleting its task registration anyway; the cloudflared process may still be running and holding its port (check with `zt doctor` or Task Manager)\n", tn)
+	}
 	out, err := runSchtasks("/delete", "/tn", tn, "/f")
 	if err != nil {
 		return fmt.Errorf("schtasks /delete: %w\n%s\n%s", err, out, accessDeniedHint(tn))
@@ -386,6 +409,9 @@ func UninstallWatchdog() error {
 		return nil
 	}
 	_, _ = runSchtasks("/end", "/tn", watchdogTaskName)
+	if !waitForTaskStopped(watchdogTaskName) {
+		fmt.Printf("  ! %s did not report stopped after /end — deleting its task registration anyway; the watchdog process may still be running (check Task Manager)\n", watchdogTaskName)
+	}
 	out, err := runSchtasks("/delete", "/tn", watchdogTaskName, "/f")
 	if err != nil {
 		return fmt.Errorf("schtasks /delete: %w\n%s\n%s", err, out, accessDeniedHint(watchdogTaskName))

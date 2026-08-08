@@ -108,6 +108,7 @@ runs:
         MODE: ${{ inputs.mode }}
         DOCKER: ${{ inputs.docker }}
         PORT: ${{ inputs.port }}
+        CREATE_DEPLOYMENT: ${{ inputs.create-deployment }}
       run: |
         set -euo pipefail
         case "$MODE" in
@@ -117,6 +118,22 @@ runs:
         if [ "$MODE" = "up" ] && [ "$DOCKER" != "true" ] && [ -z "$PORT" ]; then
           echo "::error::port is required for mode=up unless docker is true"
           exit 1
+        fi
+        # jq is used unconditionally (config write, up/down argument
+        # building); gh only when the Deployments API steps actually run.
+        # Failing fast here with a clear message beats the composite
+        # action dying several steps in with a bare "command not found"
+        # on a self-hosted runner that doesn't have these preinstalled —
+        # both ship by default on GitHub-hosted Ubuntu runners.
+        command -v jq >/dev/null 2>&1 || {
+          echo "::error::jq is required (not found on PATH) — install it or use a runner image that includes it"
+          exit 1
+        }
+        if [ "$CREATE_DEPLOYMENT" = "true" ]; then
+          command -v gh >/dev/null 2>&1 || {
+            echo "::error::gh (GitHub CLI) is required for create-deployment (not found on PATH) — install it, or set create-deployment: 'false' to skip the Deployments UI integration"
+            exit 1
+          }
         fi
 
     - name: Compute hostname

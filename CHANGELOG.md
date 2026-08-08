@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add WinGet publishing step to release workflow
+
 ### Fixed
 
 - **Windows:** `zt down`/`zt watchdog disable` now end the Task Scheduler task before deleting it, instead of just deleting its registration. `schtasks /delete` never stopped an already-running instance of the task's action — since that action is `zt.exe internal run` (as of v0.8.3), the leftover process was a literal "zt" process that outlived `zt down`, indistinguishable from any other running zt and enough to make `scoop update zt` refuse to update with "still running" even after every tunnel had genuinely been torn down. If you're hitting this now: `taskkill /F /IM zt.exe` (or End Task in Task Manager) once to clear the orphan, then `scoop update zt` as usual — this fix only prevents new orphans, it doesn't reach back and clean up ones from before it

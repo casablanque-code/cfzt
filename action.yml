@@ -172,6 +172,7 @@ runs:
         chmod 600 "${HOME}/.zt-config.json"
 
     - name: zt up
+      id: zt-up
       if: inputs.mode == 'up'
       shell: bash
       env:
@@ -202,6 +203,7 @@ runs:
         zt "${args[@]}"
 
     - name: Record GitHub deployment
+      id: record-deployment
       if: inputs.mode == 'up' && inputs.create-deployment == 'true'
       shell: bash
       env:
@@ -240,6 +242,29 @@ runs:
           --arg environment_url "$URL" \
           '{state: "success", environment: $environment, environment_url: $environment_url, description: "tunnel live"}')
         gh api "repos/${REPO}/deployments/${deployment_id}/statuses" --method POST --input - <<< "$status_payload"
+
+    - name: Clean up tunnel on deployment-recording failure
+      # zt up creating a live tunnel while the GitHub Deployment never
+      # gets recorded leaves Cloudflare state that nothing in the
+      # workflow knows to tear down later — the corresponding "down" run
+      # (keyed off task=cfzt:<name>) will never find a deployment to
+      # react to, and there's no other trigger for it. If the up half
+      # succeeded but recording it failed, undo the tunnel immediately
+      # rather than leaving an orphaned preview live indefinitely.
+      # always() is required here: the default step condition skips this
+      # step entirely once any prior step has failed, which would also
+      # skip this cleanup — always() plus the explicit outcome checks
+      # narrow it back down to exactly the up-succeeded/record-failed case.
+      if: >-
+        always() && inputs.mode == 'up' && inputs.create-deployment == 'true' &&
+        steps.zt-up.outcome == 'success' && steps.record-deployment.outcome == 'failure'
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+      run: |
+        set -euo pipefail
+        echo "::warning::GitHub deployment recording failed after zt up succeeded — tearing the tunnel back down"
+        zt down "$NAME" --remote
 
     - name: zt down
       if: inputs.mode == 'down'

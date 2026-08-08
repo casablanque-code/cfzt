@@ -91,7 +91,13 @@ jobs:
             git commit -m "chore(scoop): bump bucket to ${GITHUB_REF_NAME}"
             git push origin main
           fi
-
+          
+      - name: Publish to WinGet
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: casablanque-code.zt # pkg name at microsoft/winget-pkgs
+          token: ${{ secrets.WINGET_TOKEN }}
+        
       - name: Update Homebrew tap
         run: |
           hash() { awk '{print $1}' "dist/$1.sha256"; }

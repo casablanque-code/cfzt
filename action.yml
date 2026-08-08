@@ -210,6 +210,7 @@ runs:
         fi
 
     - name: Write cfzt config
+      id: write-config
       shell: bash
       env:
         CF_API_TOKEN: ${{ inputs.cloudflare-api-token }}
@@ -217,6 +218,11 @@ runs:
         DOMAIN: ${{ inputs.domain }}
       run: |
         set -euo pipefail
+        if [ -e "${HOME}/.zt-config.json" ]; then
+          echo "created=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "created=true" >> "$GITHUB_OUTPUT"
+        fi
         jq -n \
           --arg api_token "$CF_API_TOKEN" \
           --arg account_id "$CF_ACCOUNT_ID" \
@@ -353,3 +359,17 @@ runs:
             -f "state=inactive" \
             -f "environment=${ENVIRONMENT}"
         done
+
+    - name: Remove cfzt config
+      # Only removes the file this run itself created (write-config's
+      # created=true) — never a config that already existed on the
+      # runner before this action touched it, e.g. a self-hosted runner
+      # with its own persistent ~/.zt-config.json. always() so this
+      # still runs after an earlier step failure; on GitHub-hosted
+      # ephemeral runners the API token dying with the VM makes this
+      # mostly redundant, but on self-hosted/persistent runners a
+      # Cloudflare API token left sitting in a world-readable-by-owner
+      # file after the job ends is unnecessary exposure.
+      if: always() && steps.write-config.outputs.created == 'true'
+      shell: bash
+      run: rm -f "${HOME}/.zt-config.json"

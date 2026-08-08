@@ -5,15 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.10.0] - 2026-08-09
 
 ### Added
 
 - Add WinGet publishing step to release workflow
+- `cloudflared-version` / `cfzt-version` action inputs to pin exact releases instead of always tracking `latest`/`main` — leaving them unset keeps the previous behavior, with a workflow warning nudging toward pinning for reproducible CI
+- `install.sh` accepts a `ZT_VERSION` env var to install a specific release instead of resolving `latest`
 
 ### Fixed
 
 - **Windows:** `zt down`/`zt watchdog disable` now end the Task Scheduler task before deleting it, instead of just deleting its registration. `schtasks /delete` never stopped an already-running instance of the task's action — since that action is `zt.exe internal run` (as of v0.8.3), the leftover process was a literal "zt" process that outlived `zt down`, indistinguishable from any other running zt and enough to make `scoop update zt` refuse to update with "still running" even after every tunnel had genuinely been torn down. If you're hitting this now: `taskkill /F /IM zt.exe` (or End Task in Task Manager) once to clear the orphan, then `scoop update zt` as usual — this fix only prevents new orphans, it doesn't reach back and clean up ones from before it
+- **Windows:** `zt down`/`zt watchdog disable` now also wait for the task to actually leave the Running state after ending it, before deleting its registration — `schtasks /end` only requests termination and returns immediately, so a slow-to-die cloudflared could still be alive and holding its port right after teardown reported success. If it's still running once the (short) wait is up, teardown proceeds anyway and prints a warning rather than blocking indefinitely on a possibly-stuck process
+- **GitHub Action:** the "down" step matched deployments to mark inactive by `environment` alone. Since `environment` defaults to the tunnel `name` but can be overridden, several previews sharing the same explicit `environment:` value would have one preview's teardown mark every other preview's deployment inactive too. Deployments are now additionally tagged with `task: "cfzt:<name>"` at creation and matched on that, which is unique per preview regardless of `environment`
+- **GitHub Action:** if recording the GitHub Deployment failed after `zt up` had already succeeded, the tunnel was left running with nothing in the workflow able to find or tear it down later. The action now runs `zt down --remote` as a cleanup step in that specific case
+- **GitHub Action:** `Validate inputs` now checks for `gh`/`jq` on `PATH` up front with an actionable error, instead of failing several steps later with a bare "command not found" on a runner that doesn't have them preinstalled
+- **GitHub Action:** the Cloudflare API token written to `~/.zt-config.json` for the duration of the run is now removed at the end of it — only if the run itself created the file, never a config a self-hosted runner already had
+- `zt up --docker` picked a container's exposed port by iterating a Go map, whose order is randomized — a container publishing more than one port (`-p 8080:80 -p 8443:443`) could get a different port picked on different runs of the identical command. Port selection is now deterministic: the lowest TCP container port is always chosen
 
 ## [0.9.0] - 2026-08-08
 

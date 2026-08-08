@@ -14,9 +14,17 @@ case "$ARCH" in
   *)       echo "Unsupported arch: $ARCH"; exit 1 ;;
 esac
 
-# Resolve latest release tag
-TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-      | grep '"tag_name"' | sed 's/.*"tag_name": "\(.*\)".*/\1/')
+# Resolve release tag. ZT_VERSION lets a caller (e.g. the cfzt-action
+# GitHub Action, or anyone scripting this for CI) pin to a specific
+# release instead of always tracking main's idea of "latest" — without
+# it, the same `curl install.sh | bash` line can silently install a
+# different zt build tomorrow than it did today.
+if [[ -n "${ZT_VERSION:-}" ]]; then
+  TAG="$ZT_VERSION"
+else
+  TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+        | grep '"tag_name"' | sed 's/.*"tag_name": "\(.*\)".*/\1/')
+fi
 
 if [[ -z "$TAG" ]]; then
   echo "error: could not resolve latest release tag" >&2

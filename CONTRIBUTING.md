@@ -4,6 +4,8 @@ cfzt is built to keep Cloudflare Zero Trust setup deterministic and predictable.
 
 If you want to contribute - keep it simple and aligned with that goal.
 
+Before submitting a PR that touches tunnel lifecycle, Docker port detection, the manifest, or Windows service management, run through [docs/manual-testing.md](docs/manual-testing.md) - those scenarios need a live Docker daemon and Cloudflare account, so they aren't covered by CI.
+
 ## Getting started
 
 * Fork the repo

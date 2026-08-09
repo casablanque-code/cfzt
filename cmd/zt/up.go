@@ -16,12 +16,13 @@ import (
 )
 
 var (
-	flagPublic   bool
-	flagEmails   []string
-	flagDocker   bool
-	flagTCP      bool
-	flagProtocol string
-	flagForce    bool
+	flagPublic        bool
+	flagEmails        []string
+	flagDocker        bool
+	flagContainerPort string
+	flagTCP           bool
+	flagProtocol      string
+	flagForce         bool
 )
 
 var upCmd = &cobra.Command{
@@ -30,6 +31,7 @@ var upCmd = &cobra.Command{
 	Example: `  zt up grafana 3000 --allow you@example.com
   zt up grafana --docker --allow you@example.com
   zt up portainer --docker --allow you@example.com
+  zt up multi --docker --container-port 443 --allow you@example.com
   zt up api 8080 --public
   zt up portainer 9000 --tcp --allow you@example.com`,
 	Args: cobra.RangeArgs(1, 2),
@@ -40,6 +42,7 @@ func init() {
 	upCmd.Flags().BoolVar(&flagPublic, "public", false, "bypass Zero Trust (public access)")
 	upCmd.Flags().StringArrayVar(&flagEmails, "allow", nil, "restrict access to specific emails (repeatable)")
 	upCmd.Flags().BoolVar(&flagDocker, "docker", false, "auto-detect port from Docker container with this name")
+	upCmd.Flags().StringVar(&flagContainerPort, "container-port", "", "which container-side port to expose when the container publishes more than one (e.g. 443) — requires --docker")
 	upCmd.Flags().BoolVar(&flagTCP, "tcp", false, "force TCP (http2) protocol — use if QUIC/UDP is blocked by your ISP")
 	upCmd.Flags().StringVar(&flagProtocol, "protocol", "auto", "cloudflared protocol: auto, quic, http2")
 	upCmd.Flags().BoolVar(&flagForce, "force", false, "replace an existing DNS record that zt didn't create")
@@ -48,13 +51,14 @@ func init() {
 // tunnelOpts carries all intent parameters for creating a tunnel.
 // Shared between runUp (CLI flags) and runApply (manifest fields).
 type tunnelOpts struct {
-	name     string
-	port     string // string to keep Atoi error handling in one place
-	protocol string
-	public   bool
-	emails   []string
-	docker   bool
-	force    bool // replace an existing non-zt DNS record instead of refusing
+	name          string
+	port          string // string to keep Atoi error handling in one place
+	protocol      string
+	public        bool
+	emails        []string
+	docker        bool
+	containerPort string // container-side port to pin when docker publishes more than one; empty = lowest
+	force         bool   // replace an existing non-zt DNS record instead of refusing
 }
 
 func runUp(cmd *cobra.Command, args []string) error {
@@ -74,9 +78,13 @@ func runUp(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unsupported cloudflared version")
 	}
 
+	if flagContainerPort != "" && !flagDocker {
+		return fmt.Errorf("--container-port requires --docker")
+	}
+
 	if flagDocker {
 		fmt.Printf("  → Detecting port for Docker container: %s\n", name)
-		detected, err := docker.FindContainerPort(name)
+		detected, err := docker.FindContainerPort(name, flagContainerPort)
 		if err != nil {
 			return err
 		}
@@ -100,13 +108,14 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 
 	return createTunnel(tunnelOpts{
-		name:     name,
-		port:     port,
-		protocol: protocol,
-		public:   flagPublic,
-		emails:   flagEmails,
-		docker:   flagDocker,
-		force:    flagForce,
+		name:          name,
+		port:          port,
+		protocol:      protocol,
+		public:        flagPublic,
+		emails:        flagEmails,
+		docker:        flagDocker,
+		containerPort: flagContainerPort,
+		force:         flagForce,
 	})
 }
 
@@ -253,18 +262,19 @@ func createTunnel(opts tunnelOpts) error {
 
 	// 8. Persist state
 	store.Set(&state.Tunnel{
-		Name:         opts.name,
-		TunnelID:     tunnelID,
-		Port:         mustAtoi(opts.port),
-		Hostname:     hostname,
-		Protocol:     state.Protocol(opts.protocol),
-		PID:          pid,
-		Status:       state.StatusRunning,
-		Public:       opts.public,
-		AllowEmails:  opts.emails,
-		DockerDetect: opts.docker,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		Name:          opts.name,
+		TunnelID:      tunnelID,
+		Port:          mustAtoi(opts.port),
+		Hostname:      hostname,
+		Protocol:      state.Protocol(opts.protocol),
+		PID:           pid,
+		Status:        state.StatusRunning,
+		Public:        opts.public,
+		AllowEmails:   opts.emails,
+		DockerDetect:  opts.docker,
+		ContainerPort: opts.containerPort,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	})
 	if err := store.Save(); err != nil {
 		return fmt.Errorf("state save failed: %w", err)

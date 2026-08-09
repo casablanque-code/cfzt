@@ -17,12 +17,13 @@ import (
 // It mirrors the subset of state.Tunnel that represents intent rather
 // than runtime/observed state.
 type ServiceSpec struct {
-	Port     int      `yaml:"port,omitempty"`
-	Docker   bool     `yaml:"docker,omitempty"`
-	Protocol string   `yaml:"protocol,omitempty"`
-	Public   bool     `yaml:"public,omitempty"`
-	Allow    []string `yaml:"allow,omitempty"`
-	Force    bool     `yaml:"force,omitempty"` // replace an existing non-zt DNS record instead of refusing
+	Port          int      `yaml:"port,omitempty"`
+	Docker        bool     `yaml:"docker,omitempty"`
+	ContainerPort string   `yaml:"container_port,omitempty"` // container-side port to pin when docker publishes more than one
+	Protocol      string   `yaml:"protocol,omitempty"`
+	Public        bool     `yaml:"public,omitempty"`
+	Allow         []string `yaml:"allow,omitempty"`
+	Force         bool     `yaml:"force,omitempty"` // replace an existing non-zt DNS record instead of refusing
 }
 
 // Manifest is the root document of a zt.yaml file.
@@ -46,6 +47,9 @@ func Load(path string) (*Manifest, error) {
 	for name, svc := range m.Services {
 		if !svc.Docker && svc.Port == 0 {
 			return nil, fmt.Errorf("service %q: must set either 'port' or 'docker: true'", name)
+		}
+		if svc.ContainerPort != "" && !svc.Docker {
+			return nil, fmt.Errorf("service %q: 'container_port' requires 'docker: true'", name)
 		}
 	}
 	return &m, nil

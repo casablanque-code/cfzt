@@ -50,11 +50,12 @@ func runExport(cmd *cobra.Command, args []string) error {
 	m := &manifest.Manifest{Services: make(map[string]manifest.ServiceSpec)}
 	for _, t := range tunnels {
 		m.Services[t.Name] = manifest.ServiceSpec{
-			Port:     t.Port,
-			Docker:   t.DockerDetect,
-			Protocol: protocolForExport(t.Protocol),
-			Public:   t.Public,
-			Allow:    t.AllowEmails,
+			Port:          t.Port,
+			Docker:        t.DockerDetect,
+			ContainerPort: t.ContainerPort,
+			Protocol:      protocolForExport(t.Protocol),
+			Public:        t.Public,
+			Allow:         t.AllowEmails,
 		}
 	}
 

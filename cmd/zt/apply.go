@@ -128,13 +128,14 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 
 		if err := createTunnel(tunnelOpts{
-			name:     name,
-			port:     port,
-			protocol: protocol,
-			public:   svc.Public,
-			emails:   svc.Allow,
-			docker:   svc.Docker,
-			force:    svc.Force,
+			name:          name,
+			port:          port,
+			protocol:      protocol,
+			public:        svc.Public,
+			emails:        svc.Allow,
+			docker:        svc.Docker,
+			containerPort: svc.ContainerPort,
+			force:         svc.Force,
 		}); err != nil {
 			fmt.Printf("  %s %-20s failed: %v\n", warnFn("!"), name, err)
 			failed = append(failed, name)
@@ -161,7 +162,7 @@ func resolveApplyPort(name string, svc manifest.ServiceSpec) (string, error) {
 		if svc.Port != 0 {
 			return strconv.Itoa(svc.Port), nil
 		}
-		detected, err := docker.FindContainerPort(name)
+		detected, err := docker.FindContainerPort(name, svc.ContainerPort)
 		if err != nil {
 			return "", fmt.Errorf("docker port detection failed: %w", err)
 		}

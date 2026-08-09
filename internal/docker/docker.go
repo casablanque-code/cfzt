@@ -35,7 +35,8 @@ type containerSummary struct {
 }
 
 type portSummary struct {
-	PublicPort uint16 `json:"PublicPort"`
+	PrivatePort uint16 `json:"PrivatePort"`
+	PublicPort  uint16 `json:"PublicPort"`
 	Type       string `json:"Type"`
 }
 
@@ -96,19 +97,23 @@ func dockerGet(path string, v any) error {
 	return json.Unmarshal(body, v)
 }
 
-// FindContainerPort returns the host-bound TCP port for a container by name.
-func FindContainerPort(name string) (string, error) {
+// FindContainerPort returns the host-bound TCP port for a container by
+// name. containerPort, when non-empty, pins the container-side port to
+// match (e.g. "443") — required when a container publishes more than one
+// TCP port, since otherwise pickPort's lowest-port default may not be the
+// one the caller actually wants exposed.
+func FindContainerPort(name, containerPort string) (string, error) {
 	var inspect containerInspect
 	if err := dockerGet("/containers/"+name+"/json", &inspect); err != nil {
-		return findByList(name)
+		return findByList(name, containerPort)
 	}
 	if !inspect.State.Running {
 		return "", fmt.Errorf("container %q exists but is not running", name)
 	}
-	return pickPort(name, inspect.NetworkSettings.Ports)
+	return pickPort(name, containerPort, inspect.NetworkSettings.Ports)
 }
 
-func findByList(name string) (string, error) {
+func findByList(name, containerPort string) (string, error) {
 	var list []containerSummary
 	if err := dockerGet("/containers/json", &list); err != nil {
 		return "", err
@@ -125,6 +130,14 @@ func findByList(name string) (string, error) {
 			if c.State != "running" {
 				return "", fmt.Errorf("container %q found but state is %q", name, c.State)
 			}
+			if containerPort != "" {
+				for _, p := range c.Ports {
+					if p.Type == "tcp" && p.PublicPort > 0 && fmt.Sprintf("%d", p.PrivatePort) == containerPort {
+						return fmt.Sprintf("%d", p.PublicPort), nil
+					}
+				}
+				return "", fmt.Errorf("container %q has no published TCP binding for container port %s\n  hint: check `docker ps` for the container's actual published ports", name, containerPort)
+			}
 			for _, p := range c.Ports {
 				if p.PublicPort > 0 && p.Type == "tcp" {
 					return fmt.Sprintf("%d", p.PublicPort), nil
@@ -136,14 +149,27 @@ func findByList(name string) (string, error) {
 	return "", fmt.Errorf("container %q not found\n  hint: check `docker ps` for the exact container name", name)
 }
 
-func pickPort(name string, ports map[string][]portBinding) (string, error) {
-	// map iteration order is randomized in Go, so picking the first key
-	// seen made the chosen port nondeterministic across runs whenever a
-	// container published more than one (e.g. -p 8080:80 -p 8443:443) —
-	// same container, same `zt up --docker` invocation, different port
-	// depending on run. Sort keys ("80/tcp", "443/tcp", ...) and take the
-	// lowest container port among tcp bindings, so the choice is stable
-	// and matches what a reader would expect ("the app's main port").
+// pickPort resolves the host port to tunnel for a container's published
+// TCP ports. When containerPort is non-empty, it must match exactly (e.g.
+// "443" -> key "443/tcp") — an unpublished or mistyped container port is
+// an error, not a silent fallback to some other port. When empty (no
+// --container-port given), the lowest published TCP container port is
+// chosen deterministically: map iteration order is randomized in Go, so
+// picking "whichever key comes out first" made the result nondeterministic
+// across runs whenever more than one TCP port was published (e.g. -p
+// 8080:80 -p 8443:443) — same container, same `zt up --docker` invocation,
+// different port depending on run.
+func pickPort(name, containerPort string, ports map[string][]portBinding) (string, error) {
+	if containerPort != "" {
+		key := containerPort + "/tcp"
+		for _, b := range ports[key] {
+			if b.HostPort != "" {
+				return b.HostPort, nil
+			}
+		}
+		return "", fmt.Errorf("container %q has no published TCP binding for container port %s\n  hint: check `docker inspect %s` for its actual published ports", name, containerPort, name)
+	}
+
 	var tcpKeys []string
 	for k, bindings := range ports {
 		if len(bindings) == 0 || bindings[0].HostPort == "" {

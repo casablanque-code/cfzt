@@ -29,6 +29,7 @@ type Tunnel struct {
 	Public       bool         `json:"public,omitempty"`        // true if created with --public (no ZT Access app)
 	AllowEmails  []string     `json:"allow_emails,omitempty"`  // emails passed via --allow; empty + !Public means bypass policy
 	DockerDetect bool         `json:"docker_detect,omitempty"` // true if port was (or should be) auto-detected via --docker
+	ContainerPort string      `json:"container_port,omitempty"` // container-side port pinned via --container-port; empty = lowest published TCP port
 	CreatedAt    time.Time    `json:"created_at"`
 	UpdatedAt    time.Time    `json:"updated_at"`
 }

@@ -80,67 +80,20 @@ Deployment Status so the preview URL shows up in the PR's own UI, not just
 build logs.
 
 ```yaml
-name: PR preview
-on:
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-
-permissions:
-  deployments: write   # needed for the GitHub Deployments UI integration
-
-jobs:
-  preview:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        if: github.event.action != 'closed'
-      # ... build your image / start the container on localhost:3000 ...
-
-      - uses: casablanque-code/cfzt@v0.9.0
-        if: github.event.action != 'closed'
-        with:
-          mode: up
-          name: pr-${{ github.event.number }}
-          port: '3000'
-          docker: 'true'
-          public: 'true'   # or use `allow:` to restrict to your team
-          domain: example.com
-          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - uses: casablanque-code/cfzt@v0.9.0
-        if: github.event.action == 'closed'
-        with:
-          mode: down
-          name: pr-${{ github.event.number }}
-          domain: example.com
-          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+- uses: casablanque-code/cfzt@v0.10.0
+  with:
+    mode: up   # or: down
+    name: pr-${{ github.event.number }}
+    port: '3000'
+    docker: 'true'
+    public: 'true'   # or use `allow:` to restrict to your team
+    domain: example.com
+    cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 ```
 
-Notes:
-
-- **`name` must match** between the `up` and `down` calls — it's the
-  tunnel name, the hostname prefix, and what `down` resolves against
-  Cloudflare by name (see below).
-- **State across runs:** `up` and `down` normally run in entirely
-  separate, unrelated jobs — possibly weeks apart, on unrelated
-  ephemeral runners — so there's no local state file for `down` to find
-  the way there would be if the same machine had run `zt up`. The action
-  calls `zt down --remote`, which resolves the tunnel directly from
-  Cloudflare by name instead of requiring it in local state. This is
-  opt-in on the CLI itself (a plain `zt down` still requires local
-  state) because a Cloudflare Tunnel has no "created by zt" marker the
-  way a zt-managed DNS record does — resolving by name alone means
-  whatever tunnel exists under that exact name gets deleted, which is
-  exactly what a CI job tearing down its own preview wants and exactly
-  what a mistyped `zt down` on your own machine doesn't.
-- `permissions: deployments: write` is required on the calling workflow
-  for the Deployments UI integration — a composite action can't grant
-  itself permissions. Set `create-deployment: 'false'` to skip that part
-  entirely and just get the tunnel.
-
-See [`action.yml`](action.yml) for the full list of inputs.
+Full example workflow, input reference, and notes on state/matching
+across CI runs: **[docs/github-action.md](docs/github-action.md)**.
 
 ## What it does
 
@@ -255,18 +208,9 @@ scoop install cfzt/zt
 The bucket lives in this repo's [`bucket/`](bucket/) folder and updates itself automatically on every release. To pick up a new version, run `scoop update` (no arguments) first — that's what actually `git pull`s the bucket repos — then `scoop update zt`. Running `scoop update zt` on its own can still report the old version if the bucket itself hasn't been refreshed yet.
 
 `zt.exe` is a console app — double-clicking it in Explorer will show a
-"you need to open cmd.exe" prompt. That's expected; always run it from a
-terminal (cmd, PowerShell, Windows Terminal).
-
-**Don't use `setx PATH ...` to add it to PATH by hand** — `setx` truncates
-anything over 1024 characters *silently*, and on a dev machine with a few
-toolchains already installed your PATH is almost certainly already longer
-than that. It will corrupt your PATH rather than append to it. The script
-above uses `[Environment]::SetEnvironmentVariable`, which doesn't have that
-limit — but if your PATH still looks wrong afterwards (check with
-`echo %PATH%` in a **new** cmd window — env var changes don't apply to
-already-open terminals), fix it via the GUI instead: `Win`+`R` → `sysdm.cpl`
-→ **Advanced** → **Environment Variables**, rather than any more `setx`.
+"you need to open cmd.exe" prompt; always run it from a terminal. See
+[docs/windows.md](docs/windows.md) for that and other Windows-specific
+gotchas (PATH setup, task scheduling, troubleshooting).
 
 ---
 
@@ -274,21 +218,16 @@ already-open terminals), fix it via the GUI instead: `Win`+`R` → `sysdm.cpl`
 
 `zt up` installs a Task Scheduler task (`zt-<name>`, logon trigger,
 restart-on-failure) — the same auto-start/auto-restart guarantee
-systemd/launchd give on Linux/macOS, and `zt down`/`restart`/`status`/`logs`/
-`doctor` all work against it. `zt watchdog` is also available, running as its
-own `zt-watchdog` task.
+systemd/launchd give on Linux/macOS. It runs under your own logon session
+with no stored credentials and no admin prompt, same permission model as
+`systemctl --user` / a per-user LaunchAgent.
 
-The task runs under your own logon session with no stored credentials, so
-`zt up` never needs admin rights or a password prompt — same permission
-model as `systemctl --user` / a per-user LaunchAgent. The trade-off is the
-same one those have too: it only starts once *you* log in, not at machine
-boot before any user session exists.
+Windows install: [Scoop](#option-f--scoop-windows) (recommended,
+self-updating). A WinGet package is in progress — see the issue tracker
+for status.
 
-If `cloudflared` isn't on `PATH` (or task creation fails for any other
-reason), `zt up` falls back to running it as a directly tracked process —
-you'll see `(no auto-restart)` in the output when that happens.
-
-(Windows install: [Scoop](#option-f--scoop-windows) (recommended, self-updating). A winget package is planned — see the issue tracker for status.)
+Full details, gotchas, and Windows-specific troubleshooting:
+**[docs/windows.md](docs/windows.md)**.
 
 ---
 
@@ -401,68 +340,24 @@ zt status portainer --logs
 
 ### Backup & restore
 
-Export everything zt currently manages to a portable manifest:
-
 ```bash
 zt export                   # writes zt.yaml in the current directory
-zt export -o ~/backup/zt.yaml
+zt apply zt.yaml            # recreate the same services elsewhere (zt init first)
 ```
 
-The generated `zt.yaml` captures the intent behind each tunnel — port, protocol, access policy — but deliberately excludes credentials and Cloudflare-specific IDs. It is safe to commit to git.
+`zt export` snapshots everything zt manages into a portable manifest
+(credentials excluded, safe to commit). `zt apply` diffs it against local
+state and only creates what's missing — re-running it is safe, existing
+tunnels are reported and skipped, never modified or deleted automatically.
 
-```yaml
-# zt.yaml — portable cfzt service manifest
-# generated by `zt export` — credentials are NOT included here.
-# on a new machine: run `zt init` first, then `zt apply zt.yaml`
-
-services:
-  grafana:
-    port: 3000
-  portainer:
-    docker: true
-    allow:
-      - you@example.com
-  vault:
-    port: 8200
-    protocol: quic
-  api:
-    port: 8080
-    public: true
-```
-
-To recreate the same setup on a different machine:
-
-```bash
-# 1. on the new machine — configure credentials
-zt init
-
-# 2. apply the manifest
-zt apply zt.yaml
-```
-
-`zt apply` diffs the manifest against the local state and only creates what is missing. Existing tunnels are never modified or deleted automatically:
-
-```
-⚡ Applying zt.yaml
-
-  plan: to create: 3   skipped: 1   untracked: 0
-
-  ~ api                 already exists — skipping
-
-  ⚡ Bringing up grafana.example.com → localhost:3000
-  ...
-  🎉 Ready: https://grafana.example.com
-
-  ✅ Done — 3 service(s) created
-```
-
-If a service exists locally but is absent from the manifest, `zt apply` reports it without touching it — remove it explicitly with `zt down <name>` if needed.
+Manifest format, the full apply/skip behavior, and an example:
+**[docs/backup-restore.md](docs/backup-restore.md)**.
 
 ### QUIC/HTTP2 fallback watchdog
 
-cloudflared automatically falls back from QUIC to HTTP/2 when UDP is blocked or unstable — but it never tries QUIC again on its own, even after the network recovers ([cloudflare/cloudflared#1534](https://github.com/cloudflare/cloudflared/issues/1534)). A brief UDP blip can leave a tunnel stuck on HTTP/2 indefinitely, with no automatic recovery.
-
-`zt watchdog` runs in the background, watches each tunnel's log for the fallback, and restarts the tunnel after a backoff delay so cloudflared gets a fresh shot at QUIC. Only tunnels running with the default `protocol: auto` are affected — tunnels pinned via `--protocol` or `--tcp` are left alone, since that's a deliberate choice.
+cloudflared falls back from QUIC to HTTP/2 when UDP is blocked, but never
+retries QUIC on its own even after the network recovers
+([cloudflare/cloudflared#1534](https://github.com/cloudflare/cloudflared/issues/1534)).
 
 ```bash
 zt watchdog enable     # install as a background service, checks every 30s
@@ -470,7 +365,8 @@ zt watchdog status     # check if it's running
 zt watchdog disable    # remove it
 ```
 
-Restarts back off exponentially per tunnel (10 min → 20 min → ... capped at 60 min) so a tunnel with a persistently broken UDP path isn't flapped repeatedly — it still gets retried roughly once an hour rather than being abandoned.
+How it detects fallback, backoff behavior, and a known race with manual
+restarts: **[docs/watchdog.md](docs/watchdog.md)**.
 
 ### Health check
 
@@ -543,6 +439,7 @@ One of `--allow` or `--public` is required.
 | `--allow <email>` | Restrict access to this email via Cloudflare Access (repeatable) |
 | `--public` | No Zero Trust gate — skip Access app entirely |
 | `--docker` | Auto-detect port from a running Docker container with this name |
+| `--container-port <n>` | Which container-side port to expose when the container publishes more than one (requires `--docker`) |
 | `--tcp` | Force TCP (http2) — use if QUIC/UDP is blocked by your ISP |
 | `--protocol <proto>` | Protocol: `auto` (default), `quic`, `http2` |
 | `--force` | Replace an existing DNS record for the hostname even if zt didn't create it |
@@ -607,96 +504,21 @@ curl -fsSL https://raw.githubusercontent.com/casablanque-code/cfzt/main/install.
 ```
 ~/.zt-config.json                      # credentials (0600)
 ~/.zt-state.json                       # tunnel state (0600)
-~/.zt/tunnels/<name>/
-    config.yml                         # cloudflared config
-    <tunnel-id>.json                   # tunnel credentials
-    cloudflared.log                    # cloudflared process log
-
-~/.config/systemd/user/
-    zt-<name>.service                  # systemd unit (Linux)
-
-~/Library/LaunchAgents/
-    com.zt.<name>.plist                # LaunchAgent (macOS)
-
-Task Scheduler > zt-<name>              # scheduled task (Windows, no on-disk file)
+~/.zt/tunnels/<name>/                  # cloudflared config, credentials, log per tunnel
 ```
+
+Full layout including per-platform service files:
+**[docs/file-layout.md](docs/file-layout.md)**.
 
 ---
 
 ## Troubleshooting
 
-**`cloudflared not found in PATH`**
-Install it: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+Run `zt doctor` first — most issues are diagnosed automatically.
 
-**`unsupported cloudflared version`**
-Your cloudflared is older than 2023.x. Upgrade using the link above.
-
-**`502 Bad Gateway` after `zt up`**
-The tunnel is up but the local service is not running or not listening on the specified port.
-```bash
-curl http://localhost:<port>
-zt logs <name>
-```
-
-**`502 Bad Gateway` even though `zt status` shows the QUIC connection is up**
-`zt status` reflects what cloudflared's connectivity pre-check and connection
-registration reported - but that pre-check only opens a small test UDP
-connection, not real traffic. On some networks the pre-check passes (QUIC
-control packets get through fine) while actual response data gets silently
-dropped due to UDP fragmentation/MTU issues on the path, causing request
-timeouts that surface as 502s. This is not something `zt` or the watchdog
-can detect or fix automatically - if you're seeing 502s with an apparently
-healthy QUIC connection, force TCP:
-```bash
-zt down <name> && zt up <name> <port> --tcp
-```
-
-**Tunnel shows `stopped` in `zt ls`**
-```bash
-zt doctor
-zt logs <name>
-```
-Or check the service manager directly:
-```bash
-systemctl --user status zt-<name>      # Linux
-launchctl list com.zt.<name>           # macOS
-schtasks /query /tn zt-<name> /v       # Windows
-```
-If the service crashed, restart it:
-```bash
-zt restart <name>
-```
-Or tear down and recreate:
-```bash
-zt down <name> && zt up <name> <port>
-```
-
-**`tunnel already exists`**
-Run `zt down <name>` first. If the tunnel is stale on Cloudflare's side (e.g. after a failed previous run), `zt up` detects and removes it automatically before creating a new one.
-
-**`zone not found for domain`**
-Make sure the domain is added to Cloudflare and the API token has `Zone / DNS / Edit` permission.
-
-**Authentication error on Access app creation**
-The API token is missing `Account / Access: Apps and Policies / Edit`. Edit the token in the Cloudflare dashboard.
-
-**DNS record conflict**
-`zt up` upserts the tunnel's own CNAME automatically — if a previous zt tunnel left a stale CNAME to `*.cfargotunnel.com` for the same hostname, it's replaced without asking. If the hostname already has an A, AAAA, or CNAME record that zt didn't create (e.g. it's pointing somewhere else entirely), `zt up` refuses and prints `existing DNS record found ... refusing to replace it`. Re-run with `--force` to replace it anyway, or free up the hostname first.
-
-**Task doesn't start on Windows / `schtasks` shows the task but it's not running**
-The `zt-<name>` task only fires on logon to *your* account (see [Windows
-support](#windows-support)) — it won't start before you sign in, and it won't
-run under a different user's session. Sign in and check:
-```bash
-schtasks /query /tn zt-<name> /v
-zt logs <name>
-```
-
-**Run `zt doctor` first**
-Most issues are diagnosed automatically:
-```bash
-zt doctor
-```
+Common issues (`cloudflared not found`, `502 Bad Gateway`, tunnel shows
+`stopped`, DNS record conflicts, Windows task not starting, and more) with
+fixes: **[docs/troubleshooting.md](docs/troubleshooting.md)**.
 
 ---
 

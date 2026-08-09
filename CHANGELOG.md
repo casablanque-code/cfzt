@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-08-09
+
+### Added
+
+- `--container-port` flag for `zt up --docker` (and matching `container_port` field in `zt.yaml` manifests) to pin which published port to expose when a container publishes more than one — previously only the lowest port was reachable
+
+### Changed
+
+- README split: full details for the GitHub Action, Windows support, backup/restore, the watchdog, troubleshooting, and file layout moved to `docs/`, with a trimmed summary + links left in place
+
 ## [0.10.0] - 2026-08-09
 
 ### Added

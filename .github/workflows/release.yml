@@ -94,16 +94,6 @@ jobs:
           
       - name: Publish to WinGet
         id: winget
-        # continue-on-error: a WinGet publish failure shouldn't block the
-        # Homebrew tap update below it — they're independent publish
-        # targets. winget-releaser also cannot submit an *unpublished*
-        # package (only update an existing manifest in winget-pkgs), so
-        # until casablanque-code.zt has been manually submitted once via
-        # `wingetcreate submit` this step is *expected* to fail on every
-        # release — continue-on-error lets the rest of the release
-        # proceed in the meantime, and the final "Check publish results"
-        # step below still fails the job overall so the gap doesn't go
-        # unnoticed once winget-pkgs does have the package.
         continue-on-error: true
         uses: vedantmgoyal9/winget-releaser@v2
         with:
@@ -172,12 +162,6 @@ jobs:
           fi
 
       - name: Check publish results
-        # Runs after every other publish step regardless of the WinGet
-        # outcome (that's the point of continue-on-error above), then
-        # surfaces the WinGet failure here so it isn't silently
-        # swallowed — GitHub Release, Scoop, and Homebrew having
-        # succeeded doesn't mean the release is fully done if WinGet
-        # didn't publish.
         if: always() && steps.winget.outcome == 'failure'
         run: |
           echo "::error::WinGet publish failed — see the 'Publish to WinGet' step above. If casablanque-code.zt hasn't been submitted to microsoft/winget-pkgs yet, winget-releaser can't create the first entry; submit an initial manifest manually with wingetcreate, then this step will start succeeding on future releases."

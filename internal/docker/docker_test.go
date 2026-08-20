@@ -6,16 +6,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"context"
 )
 
-// withDockerServer starts an httptest.Server, points the package-level
-// httpClient's dialer at it instead of the real Docker unix socket for the
-// duration of the test, and restores the original client afterward.
-// docker.go always requests "http://localhost/...", so the exact address
-// dialed here just needs to reach the test server - the request path is
-// what the handler actually inspects.
+
 func withDockerServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	t.Helper()
+
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
@@ -25,11 +22,12 @@ func withDockerServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	addr := srv.Listener.Addr().String()
 	httpClient = &http.Client{
 		Transport: &http.Transport{
-			Dial: func(_, _ string) (net.Conn, error) {
-				return net.Dial("tcp", addr)
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 			},
 		},
 	}
+
 	return srv
 }
 
@@ -74,9 +72,7 @@ func TestFindContainerPort_NotRunning(t *testing.T) {
 	}
 }
 
-// When /containers/<name>/json 404s (name lookup style container ID vs
-// name mismatch, or similar), FindContainerPort falls back to listing all
-// containers and matching by name instead of failing outright.
+
 func TestFindContainerPort_FallsBackToList(t *testing.T) {
 	withDockerServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -137,12 +133,14 @@ func TestFindContainerPort_ListFallback_NoPublishedPorts(t *testing.T) {
 func TestFindContainerPort_DockerUnreachable(t *testing.T) {
 	original := httpClient
 	t.Cleanup(func() { httpClient = original })
-	// Point at a closed listener so every request fails to connect,
-	// simulating "docker not running".
+
 	httpClient = &http.Client{
 		Transport: &http.Transport{
-			Dial: func(_, _ string) (net.Conn, error) {
-				return nil, &net.OpError{Op: "dial", Err: net.UnknownNetworkError("no docker socket")}
+			DialContext: func(context.Context, string, string) (net.Conn, error) {
+				return nil, &net.OpError{
+					Op:  "dial",
+					Err: net.UnknownNetworkError("no docker socket"),
+				}
 			},
 		},
 	}
@@ -153,10 +151,6 @@ func TestFindContainerPort_DockerUnreachable(t *testing.T) {
 	}
 }
 
-// Multiple published TCP ports must resolve to the same port every time
-// regardless of Go's randomized map iteration order — a container with
-// e.g. -p 8080:80 -p 8443:443 should always pick the lowest container
-// port (80/tcp here), not whichever key the map happened to yield first.
 func TestFindContainerPort_MultiplePorts_Deterministic(t *testing.T) {
 	withDockerServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/version") {
@@ -181,9 +175,6 @@ func TestFindContainerPort_MultiplePorts_Deterministic(t *testing.T) {
 	}
 }
 
-// An explicit container port selects that binding exactly, overriding the
-// lowest-port default — this is how a caller picks a non-default port on
-// a container that publishes several.
 func TestFindContainerPort_ExplicitContainerPort(t *testing.T) {
 	withDockerServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/version") {
@@ -205,8 +196,6 @@ func TestFindContainerPort_ExplicitContainerPort(t *testing.T) {
 	}
 }
 
-// Requesting a container port the container doesn't actually publish is
-// an error, not a silent fallback to some other port.
 func TestFindContainerPort_ExplicitContainerPort_NotPublished(t *testing.T) {
 	withDockerServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/version") {
@@ -224,9 +213,6 @@ func TestFindContainerPort_ExplicitContainerPort_NotPublished(t *testing.T) {
 	}
 }
 
-// The /containers/json list-fallback path (used when /containers/<n>/json
-// 404s) must honor an explicit container port the same way the primary
-// inspect path does.
 func TestFindContainerPort_ExplicitContainerPort_ListFallback(t *testing.T) {
 	withDockerServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {

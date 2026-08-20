@@ -94,7 +94,6 @@ jobs:
           
       - name: Publish to WinGet
         id: winget
-        continue-on-error: true
         uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: casablanque-code.zt # pkg name at microsoft/winget-pkgs

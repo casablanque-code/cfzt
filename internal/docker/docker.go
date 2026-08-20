@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,31 +38,33 @@ type containerSummary struct {
 type portSummary struct {
 	PrivatePort uint16 `json:"PrivatePort"`
 	PublicPort  uint16 `json:"PublicPort"`
-	Type       string `json:"Type"`
+	Type        string `json:"Type"`
 }
 
 var httpClient = &http.Client{
 	Timeout: 5 * time.Second,
 	Transport: &http.Transport{
-		Dial: func(_, _ string) (net.Conn, error) {
-			return net.DialTimeout("unix", socketPath, 5*time.Second)
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 5 * time.Second}
+			return d.DialContext(ctx, "unix", socketPath)
 		},
 	},
 }
 
-// apiVersion asks Docker for the minimum supported API version.
 func apiVersion() string {
 	resp, err := httpClient.Get("http://localhost/version")
 	if err != nil {
-		return "v1.44" // safe fallback
+		return "v1.44"
 	}
 	defer func() { _ = resp.Body.Close() }()
+
 	body, _ := io.ReadAll(resp.Body)
 
 	var result struct {
 		MinAPIVersion string `json:"MinAPIVersion"`
 		APIVersion    string `json:"ApiVersion"`
 	}
+
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "v1.44"
 	}
@@ -74,7 +77,6 @@ func apiVersion() string {
 func dockerGet(path string, v any) error {
 	ver := apiVersion()
 	url := "http://localhost/" + ver + path
-	// clean up double slashes
 	url = strings.ReplaceAll(url, "//", "/")
 	url = strings.Replace(url, "http:/", "http://", 1)
 
@@ -97,11 +99,6 @@ func dockerGet(path string, v any) error {
 	return json.Unmarshal(body, v)
 }
 
-// FindContainerPort returns the host-bound TCP port for a container by
-// name. containerPort, when non-empty, pins the container-side port to
-// match (e.g. "443") — required when a container publishes more than one
-// TCP port, since otherwise pickPort's lowest-port default may not be the
-// one the caller actually wants exposed.
 func FindContainerPort(name, containerPort string) (string, error) {
 	var inspect containerInspect
 	if err := dockerGet("/containers/"+name+"/json", &inspect); err != nil {
@@ -118,47 +115,51 @@ func findByList(name, containerPort string) (string, error) {
 	if err := dockerGet("/containers/json", &list); err != nil {
 		return "", err
 	}
+
 	for _, c := range list {
 		for _, n := range c.Names {
-			clean := n
-			if len(clean) > 0 && clean[0] == '/' {
-				clean = clean[1:]
-			}
+			clean := strings.TrimPrefix(n, "/")
 			if clean != name {
 				continue
 			}
 			if c.State != "running" {
 				return "", fmt.Errorf("container %q found but state is %q", name, c.State)
 			}
+
 			if containerPort != "" {
 				for _, p := range c.Ports {
-					if p.Type == "tcp" && p.PublicPort > 0 && fmt.Sprintf("%d", p.PrivatePort) == containerPort {
+					if p.Type == "tcp" &&
+						p.PublicPort > 0 &&
+						fmt.Sprintf("%d", p.PrivatePort) == containerPort {
 						return fmt.Sprintf("%d", p.PublicPort), nil
 					}
 				}
-				return "", fmt.Errorf("container %q has no published TCP binding for container port %s\n  hint: check `docker ps` for the container's actual published ports", name, containerPort)
+				return "", fmt.Errorf(
+					"container %q has no published TCP binding for container port %s\n  hint: check `docker ps` for the container's actual published ports",
+					name,
+					containerPort,
+				)
 			}
+
 			for _, p := range c.Ports {
 				if p.PublicPort > 0 && p.Type == "tcp" {
 					return fmt.Sprintf("%d", p.PublicPort), nil
 				}
 			}
-			return "", fmt.Errorf("container %q running but has no published TCP ports\n  hint: start it with -p <host_port>:<container_port>", name)
+
+			return "", fmt.Errorf(
+				"container %q running but has no published TCP ports\n  hint: start it with -p <host_port>:<container_port>",
+				name,
+			)
 		}
 	}
-	return "", fmt.Errorf("container %q not found\n  hint: check `docker ps` for the exact container name", name)
+
+	return "", fmt.Errorf(
+		"container %q not found\n  hint: check `docker ps` for the exact container name",
+		name,
+	)
 }
 
-// pickPort resolves the host port to tunnel for a container's published
-// TCP ports. When containerPort is non-empty, it must match exactly (e.g.
-// "443" -> key "443/tcp") — an unpublished or mistyped container port is
-// an error, not a silent fallback to some other port. When empty (no
-// --container-port given), the lowest published TCP container port is
-// chosen deterministically: map iteration order is randomized in Go, so
-// picking "whichever key comes out first" made the result nondeterministic
-// across runs whenever more than one TCP port was published (e.g. -p
-// 8080:80 -p 8443:443) — same container, same `zt up --docker` invocation,
-// different port depending on run.
 func pickPort(name, containerPort string, ports map[string][]portBinding) (string, error) {
 	if containerPort != "" {
 		key := containerPort + "/tcp"
@@ -167,7 +168,12 @@ func pickPort(name, containerPort string, ports map[string][]portBinding) (strin
 				return b.HostPort, nil
 			}
 		}
-		return "", fmt.Errorf("container %q has no published TCP binding for container port %s\n  hint: check `docker inspect %s` for its actual published ports", name, containerPort, name)
+		return "", fmt.Errorf(
+			"container %q has no published TCP binding for container port %s\n  hint: check `docker inspect %s` for its actual published ports",
+			name,
+			containerPort,
+			name,
+		)
 	}
 
 	var tcpKeys []string
@@ -180,30 +186,37 @@ func pickPort(name, containerPort string, ports map[string][]portBinding) (strin
 		}
 		tcpKeys = append(tcpKeys, k)
 	}
+
 	if len(tcpKeys) == 0 {
-		return "", fmt.Errorf("container %q has no published TCP ports\n  hint: start it with -p <host_port>:<container_port>", name)
+		return "", fmt.Errorf(
+			"container %q has no published TCP ports\n  hint: start it with -p <host_port>:<container_port>",
+			name,
+		)
 	}
+
 	sort.Slice(tcpKeys, func(i, j int) bool {
 		return containerPortNum(tcpKeys[i]) < containerPortNum(tcpKeys[j])
 	})
+
 	best := tcpKeys[0]
 	for _, b := range ports[best] {
 		if b.HostPort != "" {
 			return b.HostPort, nil
 		}
 	}
-	return "", fmt.Errorf("container %q has no published ports\n  hint: start it with -p <host_port>:<container_port>", name)
+
+	return "", fmt.Errorf(
+		"container %q has no published ports\n  hint: start it with -p <host_port>:<container_port>",
+		name,
+	)
 }
 
-// containerPortNum extracts the numeric container port from a Docker
-// ports-map key like "80/tcp" ("443/tcp" -> 443). Unparseable keys sort
-// last (return maxInt) rather than erroring — pickPort's job is to make a
-// reasonable deterministic choice, not to validate Docker's own output.
 func containerPortNum(key string) int {
 	numPart, _, found := strings.Cut(key, "/")
 	if !found {
 		return math.MaxInt
 	}
+
 	n, err := strconv.Atoi(numPart)
 	if err != nil {
 		return math.MaxInt

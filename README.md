@@ -5,6 +5,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/casablanque-code/cfzt.svg)](https://pkg.go.dev/github.com/casablanque-code/cfzt)
 [![Gitleaks](https://img.shields.io/badge/protected%20by-gitleaks-blue)](https://github.com/casablanque-code/cfzt/actions/workflows/gitleaks.yml)
 [![Tiny Tool Town](https://img.shields.io/badge/featured-TinyToolTown-blue)](https://www.tinytooltown.com/tools/cfzt/)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-GitHub%20Action-blue?logo=github)](https://github.com/marketplace/actions/cfzt-preview-tunnel)
 [![Release](https://img.shields.io/github/v/release/casablanque-code/cfzt)](https://github.com/casablanque-code/cfzt/releases/latest)
 
 You have a service running somewhere. `zt` gives it a secure public

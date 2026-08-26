@@ -2,16 +2,22 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/casablanque-code/cfzt/internal/cloudflared"
 	"github.com/casablanque-code/cfzt/internal/docker"
+	"github.com/casablanque-code/cfzt/internal/integrity"
 	"github.com/casablanque-code/cfzt/internal/manifest"
 	"github.com/casablanque-code/cfzt/internal/state"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
+
+var flagApplyForce bool
 
 var applyCmd = &cobra.Command{
 	Use:   "apply <file>",
@@ -22,11 +28,20 @@ local state are skipped with a notice. Services that exist locally but
 are absent from the manifest are left untouched and reported — remove
 them manually with 'zt down <name>' if needed.
 
-'zt apply' never deletes or modifies existing tunnels automatically.`,
+'zt apply' never deletes or modifies existing tunnels automatically.
+
+If zt.yaml changed since it was last applied, 'zt apply' shows the diff
+and refuses to proceed until you re-run with --force — this catches an
+unexpected or tampered-with manifest before it's used to create tunnels.`,
 	Example: `  zt apply zt.yaml
-  zt apply ~/backups/home-server.yaml`,
+  zt apply ~/backups/home-server.yaml
+  zt apply zt.yaml --force   # accept a changed manifest and proceed`,
 	Args: cobra.ExactArgs(1),
 	RunE: runApply,
+}
+
+func init() {
+	applyCmd.Flags().BoolVar(&flagApplyForce, "force", false, "accept a zt.yaml that changed since it was last applied")
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
@@ -37,18 +52,45 @@ func runApply(cmd *cobra.Command, args []string) error {
 	warnFn := color.New(color.FgYellow).SprintFunc()
 	dimFn := color.New(color.FgHiBlack).SprintFunc()
 
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("reading manifest %s: %w", manifestPath, err)
+	}
+	absPath, err := filepath.Abs(manifestPath)
+	if err != nil {
+		return err
+	}
+
 	m, err := manifest.Load(manifestPath)
 	if err != nil {
 		return err
 	}
-	if len(m.Services) == 0 {
-		fmt.Println("  manifest is empty — nothing to apply")
-		return nil
-	}
-
 	store, err := state.LoadStore()
 	if err != nil {
 		return err
+	}
+
+	currentHash := integrity.Hash(raw)
+	prevSnapshot, known := store.ManifestSnapshot(absPath)
+	if known && prevSnapshot.Hash != currentHash {
+		fmt.Printf("\n%s\n\n", warnFn(fmt.Sprintf("⚠ %s changed since it was last applied", manifestPath)))
+		for _, line := range integrity.Diff(prevSnapshot.Content, string(raw)) {
+			if len(line) > 0 && line[0] == '-' {
+				fmt.Printf("  %s\n", color.New(color.FgRed).Sprint(line))
+			} else {
+				fmt.Printf("  %s\n", color.New(color.FgGreen).Sprint(line))
+			}
+		}
+		fmt.Println()
+		if !flagApplyForce {
+			return fmt.Errorf("manifest changed since last apply — re-run with --force to accept these changes and proceed")
+		}
+		fmt.Printf("  %s --force: accepting the changed manifest\n\n", warnFn("!"))
+	}
+
+	if len(m.Services) == 0 {
+		fmt.Println("  manifest is empty — nothing to apply")
+		return saveManifestSnapshot(store, absPath, currentHash, raw)
 	}
 
 	// Sort service names for deterministic output
@@ -99,7 +141,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	if len(toCreate) == 0 {
 		fmt.Printf("  %s all services already running — nothing to do\n\n", okFn("✓"))
-		return nil
+		return saveManifestSnapshot(store, absPath, currentHash, raw)
 	}
 
 	// Verify cloudflared version once before the loop, not once per service
@@ -150,7 +192,20 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	created := len(toCreate)
 	fmt.Printf("  %s\n\n", boldFmt(fmt.Sprintf("✅ Done — %d service(s) created", created)))
-	return nil
+	return saveManifestSnapshot(store, absPath, currentHash, raw)
+}
+
+// saveManifestSnapshot records the manifest that was just successfully
+// applied, so the next 'zt apply' can detect if it changes on disk before
+// then. A failed apply intentionally does not reach this — the stale
+// snapshot (or absence of one) is preserved so the next run still flags it.
+func saveManifestSnapshot(store *state.Store, absPath, hash string, raw []byte) error {
+	store.SetManifestSnapshot(absPath, state.ManifestSnapshot{
+		Hash:      hash,
+		Content:   string(raw),
+		UpdatedAt: time.Now(),
+	})
+	return store.Save()
 }
 
 // resolveApplyPort returns the port string for a service from the manifest.

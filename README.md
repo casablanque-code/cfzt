@@ -421,7 +421,11 @@ rest of the system report.
 
 ### `zt apply`
 
-`zt apply <file>` takes no additional flags. It reads the manifest at `<file>` and creates any missing services.
+| Flag | Description |
+|---|---|
+| `--force` | Accept a manifest that changed since it was last applied |
+
+`zt apply <file>` reads the manifest at `<file>` and creates any missing services. It remembers the content of the manifest it last applied; if `<file>` has changed since then — edited, or replaced by something else entirely — it shows the diff and refuses to proceed until re-run with `--force`.
 
 ### `zt watchdog`
 

@@ -151,6 +151,70 @@ func TestResolveApplyPort_DockerNoOverride_NoDockerAvailable(t *testing.T) {
 	}
 }
 
+func TestRunApply_UnchangedManifestDoesNotRequireForce(t *testing.T) {
+	home := t.TempDir()
+	testutil.SetHome(t, home)
+
+	dir := t.TempDir()
+	path := writeManifest(t, dir, &manifest.Manifest{Services: map[string]manifest.ServiceSpec{}})
+
+	if err := runApply(nil, []string{path}); err != nil {
+		t.Fatalf("first runApply() error = %v", err)
+	}
+	// Re-applying the exact same file must not be treated as tampering.
+	if err := runApply(nil, []string{path}); err != nil {
+		t.Fatalf("second runApply() (unchanged manifest) error = %v", err)
+	}
+}
+
+func TestRunApply_ChangedManifestRequiresForce(t *testing.T) {
+	home := t.TempDir()
+	testutil.SetHome(t, home)
+	flagApplyForce = false
+	t.Cleanup(func() { flagApplyForce = false })
+
+	dir := t.TempDir()
+	path := writeManifest(t, dir, &manifest.Manifest{Services: map[string]manifest.ServiceSpec{}})
+
+	if err := runApply(nil, []string{path}); err != nil {
+		t.Fatalf("first runApply() error = %v", err)
+	}
+
+	// Simulate the file changing on disk after it was last applied.
+	writeManifest(t, dir, &manifest.Manifest{Services: map[string]manifest.ServiceSpec{
+		"evil-service": {Port: 31337},
+	}})
+
+	err := runApply(nil, []string{path})
+	if err == nil {
+		t.Fatal("runApply() = nil error, want error when manifest changed since last apply without --force")
+	}
+	if !strings.Contains(err.Error(), "--force") {
+		t.Errorf("error = %q, want it to mention --force", err.Error())
+	}
+}
+
+func TestRunApply_ChangedManifestAcceptedWithForce(t *testing.T) {
+	home := t.TempDir()
+	testutil.SetHome(t, home)
+	flagApplyForce = false
+	t.Cleanup(func() { flagApplyForce = false })
+
+	dir := t.TempDir()
+	path := writeManifest(t, dir, &manifest.Manifest{Services: map[string]manifest.ServiceSpec{}})
+
+	if err := runApply(nil, []string{path}); err != nil {
+		t.Fatalf("first runApply() error = %v", err)
+	}
+
+	writeManifest(t, dir, &manifest.Manifest{Services: map[string]manifest.ServiceSpec{}})
+
+	flagApplyForce = true
+	if err := runApply(nil, []string{path}); err != nil {
+		t.Fatalf("runApply() with --force error = %v, want nil", err)
+	}
+}
+
 func TestWriteManifestHelperProducesLoadableFile(t *testing.T) {
 	// Sanity check on the test helper itself.
 	dir := t.TempDir()

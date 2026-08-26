@@ -92,8 +92,15 @@ jobs:
             git push origin main
           fi
           
+      # winget-releaser is flaky about auth: it needs a classic PAT with
+      # public_repo scope specifically — fine-grained PATs are not
+      # supported and fail with cryptic GraphQL errors like "does not
+      # have the correct permissions to execute `CreateRef`"
+      # (see vedantmgoyal9/winget-releaser#172). continue-on-error here
+      # so a WinGet hiccup can't silently skip the Homebrew step below.
       - name: Publish to WinGet
         id: winget
+        continue-on-error: true
         uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: casablanque-code.zt # pkg name at microsoft/winget-pkgs
@@ -163,5 +170,4 @@ jobs:
       - name: Check publish results
         if: always() && steps.winget.outcome == 'failure'
         run: |
-          echo "::error::WinGet publish failed — see the 'Publish to WinGet' step above. If casablanque-code.zt hasn't been submitted to microsoft/winget-pkgs yet, winget-releaser can't create the first entry; submit an initial manifest manually with wingetcreate, then this step will start succeeding on future releases."
-          exit 1
+          echo "::warning::WinGet publish failed — see the 'Publish to WinGet' step above. This no longer fails the release: binaries, Scoop, and Homebrew still published. If casablanque-code.zt hasn't been submitted to microsoft/winget-pkgs yet, winget-releaser can't create the first entry; submit an initial manifest manually with wingetcreate. Also double-check WINGET_TOKEN is a classic PAT with public_repo scope — fine-grained PATs fail with the same CreateRef error."

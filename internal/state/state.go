@@ -33,3 +33,12 @@ type Tunnel struct {
 	CreatedAt    time.Time    `json:"created_at"`
 	UpdatedAt    time.Time    `json:"updated_at"`
 }
+
+// ManifestSnapshot records the content of a zt.yaml as of its last
+// successful `zt apply`, so a later apply can detect the file having
+// changed on disk since then (see Store.ManifestSnapshot).
+type ManifestSnapshot struct {
+	Hash      string    `json:"hash"`
+	Content   string    `json:"content"`
+	UpdatedAt time.Time `json:"updated_at"`
+}

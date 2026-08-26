@@ -125,6 +125,45 @@ func TestSaveThenLoad_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestManifestSnapshot_SetGet(t *testing.T) {
+	s := &Store{Tunnels: make(map[string]*Tunnel)}
+
+	if _, ok := s.ManifestSnapshot("/home/user/zt.yaml"); ok {
+		t.Error("ManifestSnapshot() on empty store = true, want false")
+	}
+
+	snap := ManifestSnapshot{Hash: "abc123", Content: "services: {}"}
+	s.SetManifestSnapshot("/home/user/zt.yaml", snap)
+
+	got, ok := s.ManifestSnapshot("/home/user/zt.yaml")
+	if !ok || got.Hash != snap.Hash || got.Content != snap.Content {
+		t.Errorf("ManifestSnapshot() = %+v, %v, want %+v, true", got, ok, snap)
+	}
+}
+
+func TestManifestSnapshot_RoundTripsThroughSave(t *testing.T) {
+	testutil.SetHome(t, t.TempDir())
+
+	s := &Store{Tunnels: make(map[string]*Tunnel)}
+	s.SetManifestSnapshot("/home/user/zt.yaml", ManifestSnapshot{
+		Hash:      "abc123",
+		Content:   "services:\n  grafana:\n    port: 3000\n",
+		UpdatedAt: time.Now().Truncate(time.Second),
+	})
+	if err := s.Save(); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	loaded, err := LoadStore()
+	if err != nil {
+		t.Fatalf("LoadStore() error = %v", err)
+	}
+	got, ok := loaded.ManifestSnapshot("/home/user/zt.yaml")
+	if !ok || got.Hash != "abc123" {
+		t.Errorf("ManifestSnapshot() after reload = %+v, %v, want hash abc123, true", got, ok)
+	}
+}
+
 func TestSave_FilePermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("NTFS has no owner/group/other permission bits — os.WriteFile's mode argument can only toggle the read-only attribute there, always reporting 0666/0444 regardless of what's passed")

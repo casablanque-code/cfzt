@@ -1,12 +1,12 @@
 {
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Zero Trust tunnel manager for Cloudflare — one command to expose a local service through Cloudflare Zero Trust.",
   "homepage": "https://github.com/casablanque-code/cfzt",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/casablanque-code/cfzt/releases/download/v0.10.1/zt-windows-amd64.exe#/zt.exe",
-      "hash": "79a6c0f1873e14b0a1b2989e53a851230508ce2871a47ec0c5190980cc0a4779"
+      "url": "https://github.com/casablanque-code/cfzt/releases/download/v0.10.2/zt-windows-amd64.exe#/zt.exe",
+      "hash": "4de1c491c25e261710bdf1def90b6d990313b3de1680bddaeac807369876e75a"
     }
   },
   "bin": "zt.exe",

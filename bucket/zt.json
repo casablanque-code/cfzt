@@ -6,7 +6,7 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/casablanque-code/cfzt/releases/download/v0.10.2/zt-windows-amd64.exe#/zt.exe",
-      "hash": "4de1c491c25e261710bdf1def90b6d990313b3de1680bddaeac807369876e75a"
+      "hash": "7700791321d7042501aafebda8bdd4551eae9dd4f4e4b9215d7bf9f90bc93925"
     }
   },
   "bin": "zt.exe",
